@@ -5,8 +5,11 @@ import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('Starting registration process');
     await connectToDatabase();
+    console.log('DB connection successful');
     const { name, email, password, department } = await request.json();
+    console.log('Received registration data:', { name, email, department });
     
     // Check if user exists
     const existingUser = await User.findOne({ email });
@@ -45,6 +48,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     console.error('Error registering user:', error);
+    console.error('Error stack:', error.stack);
     return NextResponse.json(
       { error: error.message || 'Failed to register user' },
       { status: 500 }

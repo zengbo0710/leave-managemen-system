@@ -5,7 +5,7 @@ export interface ILeave extends Document {
   user: IUser['_id'];
   startDate: Date;
   endDate: Date;
-  leaveType: 'annual' | 'sick' | 'personal' | 'other';
+  leaveType: string;
   halfDay: {
     isHalfDay: boolean;
     period: 'morning' | 'afternoon' | null;
@@ -25,7 +25,6 @@ const LeaveSchema: Schema = new Schema(
     endDate: { type: Date, required: true },
     leaveType: { 
       type: String, 
-      enum: ['annual', 'sick', 'personal', 'other'], 
       required: true 
     },
     halfDay: {
@@ -36,7 +35,7 @@ const LeaveSchema: Schema = new Schema(
         default: null 
       }
     },
-    reason: { type: String, required: true },
+    reason: { type: String, required: false },
     status: { 
       type: String, 
       enum: ['pending', 'approved', 'rejected'], 

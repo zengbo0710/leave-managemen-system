@@ -1,3 +1,5 @@
+'use client';
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';
 
@@ -17,6 +19,7 @@ type AuthContextType = {
   register: (name: string, email: string, password: string, department: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  getToken: () => Promise<string>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -97,6 +100,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     delete axios.defaults.headers.common['Authorization'];
   };
 
+  const getToken = async (): Promise<string> => {
+    // Return token from state or localStorage
+    if (token) return token;
+    
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) return storedToken;
+    
+    throw new Error('No authentication token found');
+  };
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -105,7 +118,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       login, 
       register, 
       logout, 
-      isAuthenticated 
+      isAuthenticated,
+      getToken
     }}>
       {children}
     </AuthContext.Provider>

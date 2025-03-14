@@ -77,7 +77,7 @@ export async function sendLeaveNotification(leaveData: {
             },
             {
               type: 'mrkdwn',
-              text: `*Leave Type:*\n${leaveType.charAt(0).toUpperCase() + leaveType.slice(1)} Leave`
+              text: `*Leave Type:*\n${leaveType}`
             }
           ]
         },
