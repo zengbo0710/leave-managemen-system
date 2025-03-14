@@ -44,7 +44,7 @@ export default function Login() {
             <Image
               className="h-12 w-auto"
               src="/leave-logo.svg"
-              alt="Leave Management System"
+              alt="LMS"
               width={200}
               height={50}
               priority

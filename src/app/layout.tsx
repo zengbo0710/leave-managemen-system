@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Leave Management System",
+  title: "LMS",
   description: "A system for managing employee leave requests",
 };
 

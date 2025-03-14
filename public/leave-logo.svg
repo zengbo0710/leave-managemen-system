@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="200px" height="50px" viewBox="0 0 200 50" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-    <title>Leave Management System</title>
+    <title>LMS</title>
     <defs>
         <linearGradient x1="0%" y1="0%" x2="100%" y2="100%" id="linearGradient">
             <stop stop-color="#4F46E5" offset="0%"></stop>
@@ -23,7 +23,7 @@
             
             <!-- Text -->
             <text font-family="Arial-BoldMT, Arial" font-size="16" font-weight="bold" fill="#4F46E5">
-                <tspan x="50" y="25">Leave Management</tspan>
+                <tspan x="50" y="25">LMS</tspan>
             </text>
         </g>
     </g>

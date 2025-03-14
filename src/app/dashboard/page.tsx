@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import Image from 'next/image';
+import Link from 'next/link';
 import ChangePasswordModal from '@/components/ChangePasswordModal';
 
 type Leave = {
@@ -46,6 +47,20 @@ export default function Dashboard() {
       period: null as 'morning' | 'afternoon' | null
     }
   });
+  const [editFormData, setEditFormData] = useState({
+    id: '',
+    startDate: '',
+    endDate: '',
+    reason: '',
+    leaveType: '',
+    halfDay: {
+      isHalfDay: false,
+      period: null as 'morning' | 'afternoon' | null
+    }
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const router = useRouter();
 
   // If not authenticated, redirect to login
@@ -170,12 +185,258 @@ export default function Dashboard() {
     router.push('/login');
   };
 
+  const handleDeleteLeave = async (leaveId: string) => {
+    if (!confirm('Are you sure you want to delete this leave request?')) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      await axios.delete(`/api/leave?id=${leaveId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      // Refresh the leave list
+      fetchLeaves();
+      alert('Leave request deleted successfully');
+    } catch (error) {
+      console.error('Error deleting leave request:', error);
+      if (axios.isAxiosError(error)) {
+        alert(`Error: ${error.response?.data?.error || 'Failed to delete leave request'}`);
+      } else {
+        alert('An unexpected error occurred');
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+  
+  const handleEditLeave = (leave: Leave) => {
+    // Convert date strings to YYYY-MM-DD format for the date inputs
+    const formatDateForInput = (dateString: string) => {
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    };
+    
+    setEditFormData({
+      id: leave._id,
+      startDate: formatDateForInput(leave.startDate),
+      endDate: formatDateForInput(leave.endDate),
+      reason: leave.reason,
+      leaveType: leave.leaveType,
+      halfDay: {
+        isHalfDay: leave.halfDay?.isHalfDay || false,
+        period: leave.halfDay?.period || null
+      }
+    });
+    
+    setShowEditModal(true);
+  };
+  
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (name === 'isHalfDay') {
+      setEditFormData({
+        ...editFormData,
+        halfDay: {
+          ...editFormData.halfDay,
+          isHalfDay: (e.target as HTMLInputElement).checked
+        }
+      });
+    } else if (name === 'period') {
+      setEditFormData({
+        ...editFormData,
+        halfDay: {
+          ...editFormData.halfDay,
+          period: value as 'morning' | 'afternoon' | null
+        }
+      });
+    } else {
+      setEditFormData({
+        ...editFormData,
+        [name]: value
+      });
+    }
+  };
+  
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      setIsEditing(true);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      const response = await axios.patch('/api/leave', editFormData, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      setShowEditModal(false);
+      fetchLeaves(); // Refresh the list
+      alert('Leave request updated successfully');
+    } catch (error) {
+      console.error('Error updating leave request:', error);
+      if (axios.isAxiosError(error)) {
+        alert(`Error: ${error.response?.data?.error || 'Failed to update leave request'}`);
+      } else {
+        alert('An unexpected error occurred');
+      }
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   if (!isAuthenticated) {
     return null; // Will redirect in useEffect
   }
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Edit Leave Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Edit Leave Request</h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="grid grid-cols-1 gap-6 mt-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="editStartDate" className="block text-sm font-medium text-gray-700">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    id="editStartDate"
+                    name="startDate"
+                    required
+                    value={editFormData.startDate}
+                    onChange={handleEditInputChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="editEndDate" className="block text-sm font-medium text-gray-700">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    id="editEndDate"
+                    name="endDate"
+                    required
+                    value={editFormData.endDate}
+                    onChange={handleEditInputChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="editLeaveType" className="block text-sm font-medium text-gray-700">
+                    Leave Type
+                  </label>
+                  <input
+                    type="text"
+                    id="editLeaveType"
+                    name="leaveType"
+                    required
+                    value={editFormData.leaveType}
+                    onChange={handleEditInputChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="Enter leave type (e.g., Annual, Sick, Personal)"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="editReason" className="block text-sm font-medium text-gray-700">
+                    Reason
+                  </label>
+                  <textarea
+                    id="editReason"
+                    name="reason"
+                    rows={2}
+                    value={editFormData.reason}
+                    onChange={handleEditInputChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="editIsHalfDay"
+                        name="isHalfDay"
+                        type="checkbox"
+                        checked={editFormData.halfDay.isHalfDay}
+                        onChange={handleEditInputChange}
+                        className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="editIsHalfDay" className="font-medium text-gray-700">Half Day</label>
+                    </div>
+                  </div>
+                </div>
+                {editFormData.halfDay.isHalfDay && (
+                  <div>
+                    <label htmlFor="editPeriod" className="block text-sm font-medium text-gray-700">
+                      Period
+                    </label>
+                    <select
+                      id="editPeriod"
+                      name="period"
+                      required={editFormData.halfDay.isHalfDay}
+                      value={editFormData.halfDay.period || ''}
+                      onChange={handleEditInputChange}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    >
+                      <option value="">Select period</option>
+                      <option value="morning">Morning</option>
+                      <option value="afternoon">Afternoon</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 flex items-center justify-end gap-x-6">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="text-sm font-semibold leading-6 text-gray-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isEditing}
+                  className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-indigo-300"
+                >
+                  {isEditing ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
@@ -184,7 +445,7 @@ export default function Dashboard() {
                 <Image
                   className="h-8 w-auto"
                   src="/leave-logo.svg"
-                  alt="Leave Management System"
+                  alt="LMS"
                   width={200}
                   height={50}
                 />
@@ -192,12 +453,20 @@ export default function Dashboard() {
               <div className="ml-6 flex items-center space-x-4">
                 <span className="text-gray-900 font-medium">Dashboard</span>
                 {user?.role === 'admin' && (
-                  <a
-                    href="/admin/users"
-                    className="text-indigo-600 hover:text-indigo-900 font-medium"
-                  >
-                    User Management
-                  </a>
+                  <>
+                    <a
+                      href="/admin/users"
+                      className="text-indigo-600 hover:text-indigo-900 font-medium"
+                    >
+                      User Management
+                    </a>
+                    <Link
+                      href="/admin/slack"
+                      className="text-indigo-600 hover:text-indigo-900 font-medium"
+                    >
+                      Slack Configuration
+                    </Link>
+                  </>
                 )}
               </div>
             </div>
@@ -494,6 +763,12 @@ export default function Dashboard() {
                               >
                                 Created At
                               </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Actions
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
@@ -543,6 +818,26 @@ export default function Dashboard() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   {new Date(leave.createdAt).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  {(typeof leave.user === 'object' && leave.user?._id === user?._id) && (
+                                    <div className="flex space-x-2">
+                                      <button
+                                        onClick={() => handleEditLeave(leave)}
+                                        className="text-indigo-600 hover:text-indigo-900"
+                                        disabled={isEditing}
+                                      >
+                                        {isEditing && leave._id === editFormData.id ? 'Editing...' : 'Edit'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteLeave(leave._id)}
+                                        className="text-red-600 hover:text-red-900"
+                                        disabled={isDeleting}
+                                      >
+                                        {isDeleting ? 'Deleting...' : 'Delete'}
+                                      </button>
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             ))}

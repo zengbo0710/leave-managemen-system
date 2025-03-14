@@ -123,19 +123,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const isAdmin = decoded.role === 'admin';
     
-    // If admin, allow fetching all leave requests or filtered by user ID
-    // If employee, only allow fetching their own leave requests
+    // All users can see all leave requests, but filtered view is supported
     const queryUserId = searchParams.get('userId');
     let query = {};
     
-    if (isAdmin && queryUserId) {
+    if (queryUserId) {
+      // If a specific user ID is requested, filter by that
       query = { user: queryUserId };
-    } else if (isAdmin) {
-      // Admin can see all leave requests
-      query = {};
     } else {
-      // Regular employees can only see their own leave requests
-      query = { user: userId };
+      // Otherwise, show all leave requests for everyone
+      query = {};
     }
     
     // Make sure to fully populate user details
@@ -154,6 +151,171 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching leave requests:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to fetch leave requests' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    await connectToDatabase();
+    
+    // Extract the token from the Authorization header
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Authorization token is required' },
+        { status: 401 }
+      );
+    }
+    
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the token and extract user ID
+    let decoded: CustomJwtPayload;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Invalid token' },
+        { status: 401 }
+      );
+    }
+    
+    const userId = decoded.id;
+    const isAdmin = decoded.role === 'admin';
+    
+    // Get data from request body
+    const data = await request.json();
+    const { id, startDate, endDate, leaveType, reason, halfDay } = data;
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Leave ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    if (!startDate || !endDate || !leaveType) {
+      return NextResponse.json(
+        { error: 'Start date, end date, and leave type are required' },
+        { status: 400 }
+      );
+    }
+    
+    // Find the leave request first to check ownership
+    const leave = await Leave.findById(id);
+    
+    if (!leave) {
+      return NextResponse.json(
+        { error: 'Leave request not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Check if the user owns this leave request or is admin
+    if (leave.user.toString() !== userId && !isAdmin) {
+      return NextResponse.json(
+        { error: 'You do not have permission to edit this leave request' },
+        { status: 403 }
+      );
+    }
+    
+    // Update the leave request
+    const updatedLeave = await Leave.findByIdAndUpdate(
+      id,
+      {
+        startDate,
+        endDate,
+        leaveType,
+        reason,
+        halfDay,
+      },
+      { new: true }
+    ).populate({
+      path: 'user',
+      select: '_id name email department'
+    });
+    
+    return NextResponse.json(updatedLeave, { status: 200 });
+  } catch (error: any) {
+    console.error('Error updating leave request:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to update leave request' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectToDatabase();
+    
+    // Extract the token from the Authorization header
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Authorization token is required' },
+        { status: 401 }
+      );
+    }
+    
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the token and extract user ID
+    let decoded: CustomJwtPayload;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Invalid token' },
+        { status: 401 }
+      );
+    }
+    
+    const userId = decoded.id;
+    const isAdmin = decoded.role === 'admin';
+    
+    // Get the leave ID from the URL
+    const { searchParams } = new URL(request.url);
+    const leaveId = searchParams.get('id');
+    
+    if (!leaveId) {
+      return NextResponse.json(
+        { error: 'Leave ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    // Find the leave request first to check ownership
+    const leave = await Leave.findById(leaveId);
+    
+    if (!leave) {
+      return NextResponse.json(
+        { error: 'Leave request not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Check if the user owns this leave request or is admin
+    if (leave.user.toString() !== userId && !isAdmin) {
+      return NextResponse.json(
+        { error: 'You do not have permission to delete this leave request' },
+        { status: 403 }
+      );
+    }
+    
+    // Delete the leave request
+    await Leave.findByIdAndDelete(leaveId);
+    
+    return NextResponse.json(
+      { message: 'Leave request deleted successfully' },
+      { status: 200 }
+    );
+  } catch (error: any) {
+    console.error('Error deleting leave request:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to delete leave request' },
       { status: 500 }
     );
   }
