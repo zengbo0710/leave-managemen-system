@@ -65,10 +65,13 @@ export async function GET(request: NextRequest) {
       success: true,
       data: usersResult.rows
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch users', details: String(error) },
+      { 
+        error: 'Failed to retrieve users', 
+        details: error instanceof Error ? error.message : String(error) 
+      },
       { status: 500 }
     );
   }
@@ -116,10 +119,13 @@ export async function POST(request: NextRequest) {
       { success: true, data: user },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error creating user:', error);
     return NextResponse.json(
-      { error: 'Failed to create user', details: String(error) },
+      { 
+        error: 'Failed to create user', 
+        details: error instanceof Error ? error.message : String(error) 
+      },
       { status: 500 }
     );
   }
