@@ -35,7 +35,7 @@ async function verifyAdminAccess(request: NextRequest) {
         )
       };
     }
-    return { success: true, userId: decoded.id };
+    return { success: true };
   } catch {
     return { 
       success: false, 

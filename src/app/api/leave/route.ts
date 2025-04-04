@@ -9,26 +9,38 @@ interface CustomJwtPayload extends JwtPayload {
   role: string;
 }
 
+function extractTokenFromHeader(request: NextRequest): string | null {
+  const authHeader = request.headers.get('Authorization');
+  return authHeader?.startsWith('Bearer ') 
+    ? authHeader.split(' ')[1] 
+    : null;
+}
+
+function verifyToken(token: string): CustomJwtPayload | null {
+  try {
+    return jwt.verify(
+      token, 
+      process.env.JWT_SECRET || 'default_secret'
+    ) as CustomJwtPayload;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
     
-    // Extract the token from the Authorization header
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = extractTokenFromHeader(request);
+    if (!token) {
       return NextResponse.json(
         { error: 'Authorization token is required' },
         { status: 401 }
       );
     }
     
-    const token = authHeader.split(' ')[1];
-    
-    // Verify the token and extract user ID
-    let decoded: CustomJwtPayload;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-    } catch {
+    const decoded = verifyToken(token);
+    if (!decoded) {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -108,22 +120,16 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Extract the token from the Authorization header
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = extractTokenFromHeader(request);
+    if (!token) {
       return NextResponse.json(
         { error: 'Authorization token is required' },
         { status: 401 }
       );
     }
     
-    const token = authHeader.split(' ')[1];
-    
-    // Verify the token and extract user ID and role
-    let decoded: CustomJwtPayload;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-    } catch {
+    const decoded = verifyToken(token);
+    if (!decoded) {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -180,22 +186,16 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    // Extract the token from the Authorization header
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = extractTokenFromHeader(request);
+    if (!token) {
       return NextResponse.json(
         { error: 'Authorization token is required' },
         { status: 401 }
       );
     }
     
-    const token = authHeader.split(' ')[1];
-    
-    // Verify the token and extract user ID
-    let decoded: CustomJwtPayload;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-    } catch {
+    const decoded = verifyToken(token);
+    if (!decoded) {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -225,7 +225,7 @@ export async function PATCH(request: NextRequest) {
     
     // Find the leave request first to check ownership
     const leaveResult = await query(
-      'SELECT * FROM leaves WHERE id = $1',
+      'SELECT * FROM leave_requests WHERE id = $1',
       [id]
     );
     
@@ -251,8 +251,8 @@ export async function PATCH(request: NextRequest) {
     const periodValue = halfDay?.period || null;
     
     const updatedLeaveResult = await query(
-      `UPDATE leaves 
-       SET start_date = $1, end_date = $2, leave_type = $3, reason = $4, is_half_day = $5, period = $6, updated_at = NOW()
+      `UPDATE leave_requests 
+       SET start_date = $1, end_date = $2, leave_type = $3, reason = $4, is_half_day = $5, half_day_period = $6, updated_at = NOW()
        WHERE id = $7
        RETURNING *`,
       [startDate, endDate, leaveType, reason, isHalfDayValue, periodValue, id]
@@ -282,7 +282,7 @@ export async function PATCH(request: NextRequest) {
       leaveType: updatedLeave.leave_type,
       halfDay: {
         isHalfDay: updatedLeave.is_half_day,
-        period: updatedLeave.period
+        period: updatedLeave.half_day_period
       },
       reason: updatedLeave.reason,
       status: updatedLeave.status,
@@ -302,22 +302,16 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Extract the token from the Authorization header
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = extractTokenFromHeader(request);
+    if (!token) {
       return NextResponse.json(
         { error: 'Authorization token is required' },
         { status: 401 }
       );
     }
     
-    const token = authHeader.split(' ')[1];
-    
-    // Verify the token and extract user ID
-    let decoded: CustomJwtPayload;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-    } catch {
+    const decoded = verifyToken(token);
+    if (!decoded) {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -340,7 +334,7 @@ export async function DELETE(request: NextRequest) {
     
     // Find the leave request first to check ownership
     const leaveResult = await query(
-      'SELECT * FROM leaves WHERE id = $1',
+      'SELECT * FROM leave_requests WHERE id = $1',
       [leaveId]
     );
     
@@ -363,7 +357,7 @@ export async function DELETE(request: NextRequest) {
     
     // Delete the leave request
     await query(
-      'DELETE FROM leaves WHERE id = $1',
+      'DELETE FROM leave_requests WHERE id = $1',
       [leaveId]
     );
     
