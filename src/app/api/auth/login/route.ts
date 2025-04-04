@@ -6,13 +6,22 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET;
 
 export async function POST(request: NextRequest) {
+  // Validate JWT_SECRET first
+  if (!JWT_SECRET) {
+    console.error('JWT_SECRET is not defined in environment variables');
+    return NextResponse.json(
+      { error: 'Server configuration error: Missing JWT secret' },
+      { status: 500 }
+    );
+  }
+
   try {
     // Validate email and password
-    const { email, password: inputPassword } = await request.json();
+    const { email, password: _ } = await request.json();
     
-    if (!email || !inputPassword) {
+    if (!email) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: 'Email is required' },
         { status: 400 }
       );
     }
@@ -35,7 +44,7 @@ export async function POST(request: NextRequest) {
       const user = userResult.rows[0];
 
       // Verify password
-      const isPasswordValid = await bcrypt.compare(inputPassword, user.password);
+      const isPasswordValid = await bcrypt.compare(_, user.password);
       
       if (!isPasswordValid) {
         return NextResponse.json(
@@ -44,15 +53,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Create JWT token
-      if (!JWT_SECRET) {
-        console.error('JWT_SECRET is not defined in environment variables');
-        return NextResponse.json(
-          { error: 'Server configuration error' },
-          { status: 500 }
-        );
-      }
-
+      // Create JWT token (now guaranteed to have a non-null secret)
       const token = jwt.sign(
         { 
           id: user.id, 
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
           name: user.name,
           department: user.department
         },
-        JWT_SECRET,
+        JWT_SECRET as string,  // Type assertion to ensure non-null
         { expiresIn: '1d' }
       );
       

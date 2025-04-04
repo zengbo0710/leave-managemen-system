@@ -292,6 +292,10 @@ export async function getConnection() {
 const MAX_RETRIES = 5;       // Increased from 3
 const RETRY_DELAY = 2000;    // Increased to 2 seconds
 
+interface DatabaseError extends Error {
+  code?: string;
+}
+
 // Run a query and return results
 export async function query(text: string, params?: (string | number | boolean | null)[]) {
   let retries = 0;
@@ -320,22 +324,23 @@ export async function query(text: string, params?: (string | number | boolean | 
       } finally {
         client.release();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const dbError = error as DatabaseError;
       retries++;
       console.error(`Database connection error (attempt ${retries}/${MAX_RETRIES}):`, {
-        error: error.message,
-        code: error.code,
+        error: dbError.message,
+        code: dbError.code,
         query: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
         params: params ? JSON.stringify(params).substring(0, 100) : 'none'
       });
       
-      if (error.code === 'ECONNREFUSED') {
+      if (dbError.code === 'ECONNREFUSED') {
         console.error('Connection refused. Check if your database server is running at the specified host and port.');
-      } else if (error.code === 'ETIMEDOUT') {
+      } else if (dbError.code === 'ETIMEDOUT') {
         console.error('Connection timed out. Database server may be slow or unreachable.');
       }
       
-      if (retries >= MAX_RETRIES || (error.code !== 'ECONNREFUSED' && error.code !== 'ETIMEDOUT')) {
+      if (retries >= MAX_RETRIES || (dbError.code !== 'ECONNREFUSED' && dbError.code !== 'ETIMEDOUT')) {
         console.error('Database operation failed after maximum retry attempts or encountered a non-connection error');
         throw error;
       }
@@ -374,11 +379,12 @@ export async function checkLoginDatabaseConnection() {
         success: true,
         message: 'Database connection successful'
       };
-    } catch (error: any) {
-      console.error('Login database table check failed:', error.message);
+    } catch (error: unknown) {
+      const dbError = error as DatabaseError;
+      console.error('Login database table check failed:', dbError.message);
       
       // Handle specific errors that might occur during login
-      if (error.code === '42P01') { // undefined_table
+      if (dbError.code === '42P01') { // undefined_table
         return {
           success: false,
           message: 'Database schema issue. Please run database setup.',
@@ -389,17 +395,18 @@ export async function checkLoginDatabaseConnection() {
       return {
         success: false,
         message: 'Database error. Please contact system administrator.',
-        details: error.message
+        details: dbError.message
       };
     } finally {
       client.release();
     }
-  } catch (error: any) {
-    console.error('Login database connection check failed with exception:', error);
+  } catch (error: unknown) {
+    const dbError = error as DatabaseError;
+    console.error('Login database connection check failed with exception:', dbError);
     return {
       success: false,
       message: 'Unable to verify database connection.',
-      details: error.message
+      details: dbError.message
     };
   }
 }
