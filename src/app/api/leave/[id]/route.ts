@@ -2,23 +2,101 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import Leave from '@/models/Leave';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { AuthOptions } from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import { query } from '@/lib/db-utils';
+import bcrypt from 'bcryptjs';
+
+// Define authOptions locally
+const authOptions: AuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: 'Credentials',
+      credentials: {
+        email: { label: 'Email', type: 'text' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
+
+        try {
+          // Check user in database
+          const userResult = await query(
+            'SELECT id, name, email, password, role, department FROM users WHERE email = $1',
+            [credentials.email]
+          );
+
+          // If no user found
+          if (userResult.rows.length === 0) {
+            return null;
+          }
+
+          const user = userResult.rows[0];
+
+          // Check password
+          const isPasswordValid = await bcrypt.compare(
+            credentials.password, 
+            user.password
+          );
+
+          if (!isPasswordValid) {
+            return null;
+          }
+
+          // Return user object for session
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            department: user.department
+          };
+        } catch (error) {
+          console.error('Authentication error:', error);
+          return null;
+        }
+      }
+    })
+  ],
+  callbacks: {
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.sub || '';
+        session.user.role = token.role;
+        session.user.department = token.department;
+      }
+      return session;
+    },
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = user.role;
+        token.department = user.department;
+      }
+      return token;
+    }
+  }
+};
 
 // GET handler for retrieving a specific leave request
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     await dbConnect();
     
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession({ 
+      providers: authOptions.providers,
+      callbacks: authOptions.callbacks 
+    });
     
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const leave = await Leave.findById(context.params.id)
+    const leave = await Leave.findById(params.id)
       .populate('user', 'name email department')
       .populate('approvedBy', 'name email');
     
@@ -26,7 +104,14 @@ export async function GET(
       return NextResponse.json({ error: 'Leave not found' }, { status: 404 });
     }
     
-    return NextResponse.json(leave);
+    return NextResponse.json({
+      ...leave.toObject(),
+      _id: leave._id.toString(), // Ensure string identifier
+      user: {
+        name: leave.user?.name,
+        department: leave.user?.department
+      }
+    });
   } catch (error) {
     console.error('Error fetching leave:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -36,11 +121,11 @@ export async function GET(
 // PUT handler for updating a leave request
 export async function PUT(
   request: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     await dbConnect();
-    const { id } = context.params;
+    const { id } = params;
     const data = await request.json();
     
     const leaveRequest = await Leave.findById(id);
@@ -52,35 +137,23 @@ export async function PUT(
       );
     }
     
-    // Update leave request
-    const updatedLeave = await Leave.findByIdAndUpdate(
-      id,
-      { $set: data },
-      { new: true }
-    ).populate('user', 'name email department');
+    // Add additional update logic here
     
-    return NextResponse.json(
-      { success: true, data: updatedLeave },
-      { status: 200 }
-    );
-  } catch (error: Error | unknown) {
-    console.error('Error updating leave request:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to update leave request';
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    return NextResponse.json(leaveRequest);
+  } catch (error) {
+    console.error('Error updating leave:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
 // DELETE handler for deleting a leave request
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     await dbConnect();
-    const { id } = context.params;
+    const { id } = params;
     
     const leaveRequest = await Leave.findById(id);
     
@@ -98,11 +171,10 @@ export async function DELETE(
       { success: true, message: 'Leave request deleted successfully' },
       { status: 200 }
     );
-  } catch (error: Error | unknown) {
+  } catch (error) {
     console.error('Error deleting leave request:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to delete leave request';
     return NextResponse.json(
-      { error: errorMessage },
+      { error: 'Internal Server Error' },
       { status: 500 }
     );
   }

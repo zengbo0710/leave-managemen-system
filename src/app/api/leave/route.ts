@@ -168,7 +168,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { 
         success: true, 
-        data: result.rows 
+        data: result.rows.map(row => ({
+          ...row,
+          _id: row.id.toString(), // Ensure a string identifier
+          user: {
+            name: row.user_name,
+            department: row.department
+          }
+        }))
       },
       { status: 200 }
     );
@@ -270,7 +277,7 @@ export async function PATCH(request: NextRequest) {
     
     // Format response for frontend compatibility
     const formattedLeave = {
-      _id: updatedLeave.id,
+      _id: updatedLeave.id.toString(), // Ensure a string identifier
       user: {
         _id: user.id,
         name: user.name,

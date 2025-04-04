@@ -20,13 +20,21 @@ const eslintConfig = [
   
   // Flat config for Next.js and TypeScript
   {
-    files: ['**/*.ts', '**/*.tsx'],
+    files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: './tsconfig.json',
+        ecmaFeatures: {
+          jsx: true
+        }
+      }
+    },
     plugins: {
       '@next/next': nextPlugin,
       '@typescript-eslint': typescriptEslint,
       'react': reactPlugin
     },
-    parser: tsParser,
     rules: {
       // Disable specific warnings or errors
       'react/no-unescaped-entities': 'off',
