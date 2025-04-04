@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     let decoded: CustomJwtPayload;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -90,10 +90,11 @@ export async function POST(request: NextRequest) {
       { success: true, data: leaveRequest },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error creating leave request:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create leave request';
     return NextResponse.json(
-      { error: error.message || 'Failed to create leave request' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -116,7 +117,7 @@ export async function GET(request: NextRequest) {
     let decoded: CustomJwtPayload;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -182,10 +183,10 @@ export async function GET(request: NextRequest) {
       formattedLeaveRequests,
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error fetching leave requests:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch leave requests' },
+      { error: error instanceof Error ? error.message : 'Failed to fetch leave requests' },
       { status: 500 }
     );
   }
@@ -208,7 +209,7 @@ export async function PATCH(request: NextRequest) {
     let decoded: CustomJwtPayload;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -304,10 +305,10 @@ export async function PATCH(request: NextRequest) {
     };
     
     return NextResponse.json(formattedLeave, { status: 200 });
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error updating leave request:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to update leave request' },
+      { error: error instanceof Error ? error.message : 'Failed to update leave request' },
       { status: 500 }
     );
   }
@@ -330,7 +331,7 @@ export async function DELETE(request: NextRequest) {
     let decoded: CustomJwtPayload;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -384,10 +385,10 @@ export async function DELETE(request: NextRequest) {
       { message: 'Leave request deleted successfully' },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error deleting leave request:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to delete leave request' },
+      { error: error instanceof Error ? error.message : 'Failed to delete leave request' },
       { status: 500 }
     );
   }

@@ -37,7 +37,7 @@ async function verifyAdminAccess(request: NextRequest) {
       };
     }
     return { success: true, userId: decoded.id };
-  } catch (error) {
+  } catch {
     return { 
       success: false, 
       response: NextResponse.json(
@@ -71,10 +71,10 @@ export async function GET(
     }
     
     return NextResponse.json(user, { status: 200 });
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error fetching user:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch user' },
+      { error: error instanceof Error ? error.message : 'Failed to fetch user' },
       { status: 500 }
     );
   }
@@ -131,10 +131,10 @@ export async function PUT(
     );
     
     return NextResponse.json(updatedUser, { status: 200 });
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error updating user:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to update user' },
+      { error: error instanceof Error ? error.message : 'Failed to update user' },
       { status: 500 }
     );
   }
@@ -180,10 +180,10 @@ export async function DELETE(
       { message: 'User deleted successfully' },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error deleting user:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to delete user' },
+      { error: error instanceof Error ? error.message : 'Failed to delete user' },
       { status: 500 }
     );
   }
