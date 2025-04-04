@@ -78,8 +78,15 @@ export default function Dashboard() {
           Authorization: `Bearer ${token}`
         }
       });
-      setLeaves(response.data);
-      setFilteredLeaves(response.data);
+
+      // Ensure we're using the correct data field
+      const leaveData = response.data.data || response.data;
+      
+      // Ensure leaveData is an array
+      const leaveArray = Array.isArray(leaveData) ? leaveData : [];
+      
+      setLeaves(leaveArray);
+      setFilteredLeaves(leaveArray);
     } catch (error) {
       console.error('Error fetching leaves:', error);
       if (axios.isAxiosError(error) && error.response?.status === 401) {

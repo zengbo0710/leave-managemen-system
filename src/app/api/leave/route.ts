@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const result = await query(
-        `INSERT INTO leave_requests 
+        `INSERT INTO leaves 
          (user_id, start_date, end_date, leave_type, reason, status, is_half_day, half_day_period)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id, user_id, start_date, end_date, leave_type, reason, status, is_half_day, half_day_period`,
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
       // Admins can see all leave requests
       queryText = `
         SELECT lr.*, u.name as user_name, u.department 
-        FROM leave_requests lr
+        FROM leaves lr
         JOIN users u ON lr.user_id = u.id
         ORDER BY lr.start_date DESC
       `;
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
       // Regular users can only see their own leave requests
       queryText = `
         SELECT * 
-        FROM leave_requests 
+        FROM leaves 
         WHERE user_id = $1 
         ORDER BY start_date DESC
       `;
@@ -225,7 +225,7 @@ export async function PATCH(request: NextRequest) {
     
     // Find the leave request first to check ownership
     const leaveResult = await query(
-      'SELECT * FROM leave_requests WHERE id = $1',
+      'SELECT * FROM leaves WHERE id = $1',
       [id]
     );
     
@@ -251,7 +251,7 @@ export async function PATCH(request: NextRequest) {
     const periodValue = halfDay?.period || null;
     
     const updatedLeaveResult = await query(
-      `UPDATE leave_requests 
+      `UPDATE leaves 
        SET start_date = $1, end_date = $2, leave_type = $3, reason = $4, is_half_day = $5, half_day_period = $6, updated_at = NOW()
        WHERE id = $7
        RETURNING *`,
@@ -334,7 +334,7 @@ export async function DELETE(request: NextRequest) {
     
     // Find the leave request first to check ownership
     const leaveResult = await query(
-      'SELECT * FROM leave_requests WHERE id = $1',
+      'SELECT * FROM leaves WHERE id = $1',
       [leaveId]
     );
     
@@ -357,7 +357,7 @@ export async function DELETE(request: NextRequest) {
     
     // Delete the leave request
     await query(
-      'DELETE FROM leave_requests WHERE id = $1',
+      'DELETE FROM leaves WHERE id = $1',
       [leaveId]
     );
     

@@ -28,7 +28,7 @@ export default function UserManagement() {
   const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
   const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const { user, getToken } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
 
   // Ensure only admins can access this page
@@ -40,31 +40,57 @@ export default function UserManagement() {
 
   // Fetch users using useCallback to prevent recreating on every render
   const fetchUsers = useCallback(async () => {
-    setIsLoading(true);
-    setError('');
-
     try {
-      const token = await getToken();
+      // Set loading and clear previous errors
+      setIsLoading(true);
+      setError('');
+
+      // Retrieve token safely
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
       const response = await fetch('/api/users', {
+        method: 'GET',
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
       });
 
+      // Log the full response for debugging
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+      // Improved error handling
       if (!response.ok) {
-        throw new Error('Failed to fetch users');
+        const errorText = await response.text();
+        console.error('Fetch users error response:', errorText);
+        throw new Error(`Failed to fetch users. Status: ${response.status}, Response: ${errorText}`);
       }
 
       const data = await response.json();
-      setUsers(data);
+      
+      // Ensure data is an array
+      const usersArray = Array.isArray(data.data) ? data.data : 
+                         Array.isArray(data) ? data : 
+                         [];
+      
+      setUsers(usersArray);
     } catch (err: Error | unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Error fetching users';
       setError(errorMessage);
       console.error('Error fetching users:', err);
+
+      // If token-related error, redirect to login
+      if (errorMessage.includes('token')) {
+        router.push('/login');
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [getToken]);
+  }, [router]);
 
   useEffect(() => {
     if (user && user.role === 'admin') {

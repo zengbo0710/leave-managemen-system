@@ -7,7 +7,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 // GET handler for retrieving a specific leave request
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
     await dbConnect();
@@ -18,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const leave = await Leave.findById(params.id)
+    const leave = await Leave.findById(context.params.id)
       .populate('user', 'name email department')
       .populate('approvedBy', 'name email');
     
@@ -36,11 +36,11 @@ export async function GET(
 // PUT handler for updating a leave request
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
     await dbConnect();
-    const { id } = params;
+    const { id } = context.params;
     const data = await request.json();
     
     const leaveRequest = await Leave.findById(id);
@@ -76,11 +76,11 @@ export async function PUT(
 // DELETE handler for deleting a leave request
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
     await dbConnect();
-    const { id } = params;
+    const { id } = context.params;
     
     const leaveRequest = await Leave.findById(id);
     

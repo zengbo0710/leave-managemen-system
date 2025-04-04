@@ -57,13 +57,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const usersResult = await query(
-      'SELECT id, name, email, department, role FROM users ORDER BY name',
+      'SELECT id, name, email, department, role, created_at as "createdAt" FROM users ORDER BY name',
       []
     );
 
     return NextResponse.json({
       success: true,
-      data: usersResult.rows
+      data: usersResult.rows.map(user => ({
+        ...user,
+        _id: user.id.toString() // Ensure a string identifier
+      }))
     });
   } catch (error: unknown) {
     console.error('Error fetching users:', error);

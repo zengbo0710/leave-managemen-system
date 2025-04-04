@@ -17,75 +17,71 @@ export async function POST(request: NextRequest) {
 
   try {
     // Validate email and password
-    const { email, password } = await request.json();
+    const { email, password: inputPassword } = await request.json();
     
-    if (!email || !password) {
+    if (!email || !inputPassword) {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
       );
     }
 
-    try {
-      // Check if the user exists in the database
-      const userResult = await query(
-        'SELECT id, name, email, password, role, department FROM users WHERE email = $1',
-        [email]
-      );
+    // Check if the user exists in the database
+    const userResult = await query(
+      'SELECT id, name, email, password, role, department FROM users WHERE email = $1',
+      [email]
+    );
 
-      // If no user found, return error
-      if (userResult.rows.length === 0) {
-        return NextResponse.json(
-          { error: 'Invalid email or password' },
-          { status: 401 }
-        );
-      }
-
-      const user = userResult.rows[0];
-
-      // Verify password
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      
-      if (!isPasswordValid) {
-        return NextResponse.json(
-          { error: 'Invalid email or password' },
-          { status: 401 }
-        );
-      }
-
-      // Create JWT token (now guaranteed to have a non-null secret)
-      const token = jwt.sign(
-        { 
-          id: user.id, 
-          email: user.email,
-          role: user.role,
-          name: user.name,
-          department: user.department
-        },
-        JWT_SECRET as string,  // Type assertion to ensure non-null
-        { expiresIn: '1d' }
-      );
-      
-      // Remove password from user object before sending
-      const { password, ...userWithoutPassword } = user;
-      
-      // Format response to match what AuthContext expects
-      return NextResponse.json({
-        success: true,
-        token,
-        user: userWithoutPassword,
-        // Include data field for backward compatibility
-        data: userWithoutPassword
-      });
-      
-    } catch (error: unknown) {
-      console.error('Error logging in:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+    // If no user found, return error
+    if (userResult.rows.length === 0) {
       return NextResponse.json(
-        { error: 'Login failed', details: errorMessage },
-        { status: 500 }
+        { error: 'Invalid email or password' },
+        { status: 401 }
       );
     }
+
+    const user = userResult.rows[0];
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(inputPassword, user.password);
+    
+    if (!isPasswordValid) {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+
+    // Create JWT token (now guaranteed to have a non-null secret)
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        department: user.department
+      },
+      JWT_SECRET as string,  // Type assertion to ensure non-null
+      { expiresIn: '1d' }
+    );
+    
+    // Remove password from user object before sending
+    const userWithoutPassword = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.department
+    };
+    
+    // Format response to match what AuthContext expects
+    return NextResponse.json({
+      success: true,
+      token,
+      user: userWithoutPassword,
+      // Include data field for backward compatibility
+      data: userWithoutPassword
+    });
   } catch (error: unknown) {
     console.error('Error processing login request:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
