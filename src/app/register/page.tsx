@@ -31,8 +31,9 @@ export default function Register() {
     try {
       await register(name, email, password, department);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred during registration';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

@@ -49,7 +49,7 @@ export default function ChangePasswordModal({ isOpen, onClose }: ChangePasswordM
     try {
       const token = await getToken();
       
-      const response = await axios.post(
+      await axios.post(
         '/api/users/change-password',
         {
           currentPassword: formData.currentPassword,
@@ -73,12 +73,9 @@ export default function ChangePasswordModal({ isOpen, onClose }: ChangePasswordM
       setTimeout(() => {
         onClose();
       }, 2000);
-    } catch (error: any) {
-      if (axios.isAxiosError(error)) {
-        setError(error.response?.data.error || 'Failed to change password');
-      } else {
-        setError('An unexpected error occurred');
-      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while changing password';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

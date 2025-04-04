@@ -954,3 +954,28 @@ export default function Dashboard() {
     </div>
   );
 }
+
+// Fix missing dependencies in useEffect
+useEffect(() => {
+  fetchLeaves();
+}, [fetchLeaves]); // Added missing dependency
+
+useEffect(() => {
+  handleSearch();
+}, [handleSearch]); // Added missing dependency
+
+// Fix unused 'type' variable (line 267)
+// Replace:
+// const { id, type, status } = leave;
+// With:
+const { id, status } = leave;
+
+// Fix unused 'response' variable (line 321)
+// Replace:
+// const response = await fetch(...);
+// With one of these:
+await fetch(...); // If you don't need the response
+// OR
+const { status, statusText } = await fetch(...); // If you're only using parts of the response
+// OR
+// Add code that uses the response variable

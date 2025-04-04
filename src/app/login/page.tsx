@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import Link from 'next/link';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -29,8 +28,9 @@ export default function Login() {
     try {
       await login(email, password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred during login';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
