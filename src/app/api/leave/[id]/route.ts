@@ -164,7 +164,6 @@ export async function DELETE(
       );
     }
     
-    // Delete leave request
     await Leave.findByIdAndDelete(id);
     
     return NextResponse.json(
