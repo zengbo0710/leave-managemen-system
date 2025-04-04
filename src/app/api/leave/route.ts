@@ -45,56 +45,62 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Create the leave request with default status as 'approved'
+    // Create the leave request with default status as 'pending'
     const isHalfDayValue = halfDay?.isHalfDay || false;
     const periodValue = halfDay?.period || null;
-    
-    const leaveResult = await query(
-      `INSERT INTO leaves 
-       (user_id, start_date, end_date, leave_type, reason, status, is_half_day, period) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-       RETURNING *`,
-      [userId, startDate, endDate, leaveType, reason, 'approved', isHalfDayValue, periodValue]
-    );
-    
-    const leaveRequest = leaveResult.rows[0];
-    
-    // Get user details for Slack notification
-    const userResult = await query(
-      'SELECT * FROM users WHERE id = $1',
-      [userId]
-    );
-    
-    const user = userResult.rows[0];
-    
-    if (user) {
-      // Send Slack notification
-      await sendLeaveNotification({
-        userName: user.name,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        leaveType,
-        reason,
-        isHalfDay: isHalfDayValue,
-        halfDayPeriod: periodValue
-      });
-      
-      // Update leave request to mark that notification was sent
-      await query(
-        'UPDATE leaves SET slack_notification_sent = $1 WHERE id = $2',
-        [true, leaveRequest.id]
+
+    try {
+      const result = await query(
+        `INSERT INTO leave_requests 
+         (user_id, start_date, end_date, leave_type, reason, status, is_half_day, half_day_period)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, user_id, start_date, end_date, leave_type, reason, status, is_half_day, half_day_period`,
+        [
+          userId, 
+          startDate, 
+          endDate, 
+          leaveType, 
+          reason || null, 
+          'pending', 
+          isHalfDayValue, 
+          periodValue
+        ]
+      );
+
+      const leaveRequest = result.rows[0];
+
+      // Optional: Send Slack notification
+      try {
+        await sendLeaveNotification(leaveRequest);
+      } catch (notificationError) {
+        console.error('Failed to send Slack notification:', notificationError);
+        // Don't block the response if Slack notification fails
+      }
+
+      return NextResponse.json(
+        { 
+          success: true, 
+          data: leaveRequest 
+        },
+        { status: 201 }
+      );
+    } catch (error) {
+      console.error('Error creating leave request:', error);
+      return NextResponse.json(
+        { 
+          error: 'Failed to create leave request', 
+          details: String(error) 
+        },
+        { status: 500 }
       );
     }
-    
+  } catch (error) {
+    console.error('Error processing leave request:', error);
     return NextResponse.json(
-      { success: true, data: leaveRequest },
-      { status: 201 }
-    );
-  } catch (error: Error | unknown) {
-    console.error('Error creating leave request:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to create leave request';
-    return NextResponse.json(
-      { error: errorMessage },
+      { 
+        error: 'Failed to process leave request', 
+        details: String(error) 
+      },
       { status: 500 }
     );
   }
@@ -113,7 +119,7 @@ export async function GET(request: NextRequest) {
     
     const token = authHeader.split(' ')[1];
     
-    // Verify the token and extract user ID
+    // Verify the token and extract user ID and role
     let decoded: CustomJwtPayload;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
@@ -123,88 +129,50 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
-    
-    const { searchParams } = new URL(request.url);
-    const queryUserId = searchParams.get('userId');
-    const isAdmin = decoded.role === 'admin';
+
     const userId = parseInt(decoded.id, 10);
-    
-    // If not admin, can only see their own leaves
-    if (!isAdmin && queryUserId && parseInt(queryUserId) !== userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized to view other users\' leave requests' },
-        { status: 403 }
-      );
-    }
-    
-    let leaveRequests;
-    if (queryUserId) {
-      // If a specific user ID is requested, filter by that
-      const result = await query(
-        `SELECT l.*, 
-                u.id as user_id, u.name as user_name, u.email as user_email, u.department as user_department
-         FROM leaves l
-         JOIN users u ON l.user_id = u.id
-         WHERE l.user_id = $1
-         ORDER BY l.created_at DESC`,
-        [parseInt(queryUserId)]
-      );
-      leaveRequests = result.rows;
-    } else if (!isAdmin) {
-      // Non-admin users without specific userId can only see their own leaves
-      const result = await query(
-        `SELECT l.*, 
-                u.id as user_id, u.name as user_name, u.email as user_email, u.department as user_department
-         FROM leaves l
-         JOIN users u ON l.user_id = u.id
-         WHERE l.user_id = $1
-         ORDER BY l.created_at DESC`,
-        [userId]
-      );
-      leaveRequests = result.rows;
+    const userRole = decoded.role;
+
+    // Determine query based on user role
+    let queryText: string;
+    let queryParams: any[];
+
+    if (userRole === 'admin') {
+      // Admins can see all leave requests
+      queryText = `
+        SELECT lr.*, u.name as user_name, u.department 
+        FROM leave_requests lr
+        JOIN users u ON lr.user_id = u.id
+        ORDER BY lr.start_date DESC
+      `;
+      queryParams = [];
     } else {
-      // Otherwise, admin can see all leave requests for everyone
-      const result = await query(
-        `SELECT l.*, 
-                u.id as user_id, u.name as user_name, u.email as user_email, u.department as user_department
-         FROM leaves l
-         JOIN users u ON l.user_id = u.id
-         ORDER BY l.created_at DESC`,
-        []
-      );
-      leaveRequests = result.rows;
+      // Regular users can only see their own leave requests
+      queryText = `
+        SELECT * 
+        FROM leave_requests 
+        WHERE user_id = $1 
+        ORDER BY start_date DESC
+      `;
+      queryParams = [userId];
     }
-    
-    // Format the response to match the expected structure in the frontend
-    const formattedLeaveRequests = leaveRequests.map(leave => ({
-      _id: leave.id,
-      user: {
-        _id: leave.user_id,
-        name: leave.user_name,
-        email: leave.user_email,
-        department: leave.user_department
-      },
-      startDate: leave.start_date,
-      endDate: leave.end_date,
-      leaveType: leave.leave_type,
-      halfDay: {
-        isHalfDay: leave.is_half_day,
-        period: leave.period
-      },
-      reason: leave.reason,
-      status: leave.status,
-      approvedBy: leave.approved_by_id,
-      createdAt: leave.created_at
-    }));
-    
+
+    const result = await query(queryText, queryParams);
+
     return NextResponse.json(
-      formattedLeaveRequests,
+      { 
+        success: true, 
+        data: result.rows 
+      },
       { status: 200 }
     );
-  } catch (error: Error | unknown) {
-    console.error('Error fetching leave requests:', error);
+  } catch (error) {
+    console.error('Error retrieving leave requests:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch leave requests' },
+      { 
+        error: 'Failed to retrieve leave requests', 
+        details: String(error) 
+      },
       { status: 500 }
     );
   }
