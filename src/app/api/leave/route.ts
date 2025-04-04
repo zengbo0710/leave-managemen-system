@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
 
     // Determine query based on user role
     let queryText: string;
-    let queryParams: any[];
+    let queryParams: string[] | number[];
 
     if (userRole === 'admin') {
       // Admins can see all leave requests
@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
         WHERE user_id = $1 
         ORDER BY start_date DESC
       `;
-      queryParams = [userId];
+      queryParams = [userId.toString()];
     }
 
     const result = await query(queryText, queryParams);
