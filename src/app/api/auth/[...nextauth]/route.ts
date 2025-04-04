@@ -1,4 +1,5 @@
-import NextAuth, { 
+import NextAuth from 'next-auth';
+import { 
   AuthOptions, 
   Session, 
   User 
@@ -29,7 +30,7 @@ declare module 'next-auth/jwt' {
   }
 }
 
-export const authOptions: AuthOptions = {
+const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -49,13 +50,14 @@ export const authOptions: AuthOptions = {
             [credentials.email]
           );
 
+          // If no user found
           if (userResult.rows.length === 0) {
             return null;
           }
 
           const user = userResult.rows[0];
 
-          // Verify password
+          // Check password
           const isPasswordValid = await bcrypt.compare(
             credentials.password, 
             user.password
@@ -67,7 +69,7 @@ export const authOptions: AuthOptions = {
 
           // Return user object for session
           return {
-            id: user.id.toString(),
+            id: user.id,
             name: user.name,
             email: user.email,
             role: user.role,
@@ -77,31 +79,28 @@ export const authOptions: AuthOptions = {
           console.error('Authentication error:', error);
           return null;
         }
-      },
-    }),
-  ],
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  pages: {
-    signIn: '/login',
-  },
-  callbacks: {
-    async jwt({ token, user }: { token: JWT, user?: User }) {
-      if (user) {
-        token.role = user.role;
-        token.department = user.department;
       }
-      return token;
-    },
-    async session({ session, token }: { session: Session, token: JWT }) {
-      if (session.user) {
+    })
+  ],
+  callbacks: {
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.sub || '';
         session.user.role = token.role;
         session.user.department = token.department;
       }
       return session;
+    },
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = (user as User & { role?: string }).role;
+        token.department = (user as User & { department?: string }).department;
+      }
+      return token;
     }
+  },
+  pages: {
+    signIn: '/login'
   }
 };
 
