@@ -3,13 +3,13 @@ import bcrypt from 'bcryptjs';
 import { query } from '@/lib/db-utils';
 import jwt from 'jsonwebtoken';
 
+const JWT_SECRET = process.env.JWT_SECRET;
+
 export async function POST(req: NextRequest) {
   try {
+    // Validate email and password
     const { email, password } = await req.json();
     
-    console.log(`Login attempt for email: ${email}`);
-    
-    // Input validation
     if (!email || !password) {
       return NextResponse.json(
         { error: 'Email and password are required' },
@@ -18,23 +18,23 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      // Query for the user with email
-      const result = await query(
+      // Check if the user exists in the database
+      const userResult = await query(
         'SELECT id, name, email, password, role, department FROM users WHERE email = $1',
         [email]
       );
 
-      // Check if user exists
-      if (result.rows.length === 0) {
+      // If no user found, return error
+      if (userResult.rows.length === 0) {
         return NextResponse.json(
           { error: 'Invalid email or password' },
           { status: 401 }
         );
       }
 
-      const user = result.rows[0];
-      
-      // Compare passwords
+      const user = userResult.rows[0];
+
+      // Verify password
       const isPasswordValid = await bcrypt.compare(password, user.password);
       
       if (!isPasswordValid) {
@@ -43,9 +43,8 @@ export async function POST(req: NextRequest) {
           { status: 401 }
         );
       }
-      
+
       // Create JWT token
-      const JWT_SECRET = process.env.JWT_SECRET;
       if (!JWT_SECRET) {
         console.error('JWT_SECRET is not defined in environment variables');
         return NextResponse.json(
@@ -54,9 +53,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Remove password from user object before creating token
-      const { password: _, ...userWithoutPassword } = user;
-      
       const token = jwt.sign(
         { 
           id: user.id, 
@@ -69,6 +65,9 @@ export async function POST(req: NextRequest) {
         { expiresIn: '1d' }
       );
       
+      // Remove password from user object before sending
+      const { password: _, ...userWithoutPassword } = user;
+      
       // Format response to match what AuthContext expects
       return NextResponse.json({
         success: true,
@@ -78,17 +77,19 @@ export async function POST(req: NextRequest) {
         data: userWithoutPassword
       });
       
-    } catch (dbError: any) {
-      console.error('Database error during login:', dbError);
+    } catch (error: unknown) {
+      console.error('Error logging in:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return NextResponse.json(
-        { error: 'Database error', details: dbError.message },
+        { error: 'Login failed', details: errorMessage },
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error logging in:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Login failed', details: error.message },
+      { error: 'Login failed', details: errorMessage },
       { status: 500 }
     );
   }

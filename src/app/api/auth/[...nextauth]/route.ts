@@ -9,7 +9,7 @@ export const authOptions = {
         username: { label: 'Username', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials, req) {
+      async authorize(credentials, _req) {
         // Replace this with your own authentication logic
         if (credentials?.username === 'admin' && credentials?.password === 'password') {
           // Note: NextAuth User requires id to be a string
