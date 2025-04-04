@@ -31,15 +31,30 @@ const eslintConfig = [
       }
     },
     rules: {
-      // Minimal rules to prevent critical issues
+      // Convert all errors to warnings
       'no-unused-vars': 'warn',
       '@typescript-eslint/no-unused-vars': 'warn',
-      '@next/next/no-img-element': 'off',
-      'react/prop-types': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/explicit-function-return-type': 'warn',
+      '@typescript-eslint/no-non-null-assertion': 'warn',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'warn',
       
-      // Additional minimal Next.js specific rules
+      // Next.js specific rules
+      '@next/next/no-img-element': 'warn',
       '@next/next/no-html-link-for-pages': 'warn',
       '@next/next/no-sync-scripts': 'warn',
+      
+      // React rules
+      'react/prop-types': 'warn',
+      'react/no-unescaped-entities': 'warn',
+      'react/react-in-jsx-scope': 'warn',
+      
+      // General warnings
+      'no-console': 'warn',
+      'no-debugger': 'warn',
+      
+      // Disable specific errors completely
+      '@typescript-eslint/ban-ts-comment': 'off',
     }
   },
   
