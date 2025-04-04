@@ -1,14 +1,6 @@
 import { WebClient } from '@slack/web-api';
 import { query } from './db-utils';
-
-// Define SlackConfig interface to replace the 'any' type
-interface SlackConfig {
-  bot_token: string;
-  enabled: boolean;
-  channel_id: string;
-  dayRange?: number;
-  channelId?: string;
-}
+import { SlackConfig } from '../models/SlackConfig';
 
 // This function loads the Slack config from database and creates a client
 export async function getSlackClient(): Promise<{ client: WebClient | null, config: SlackConfig | null }> {

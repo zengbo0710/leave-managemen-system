@@ -1,10 +1,10 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-interface ISlackConfigMethods {
-  // Instance methods can be added here
-}
+// Replace empty interface with Record type or add methods
+type ISlackConfigMethods = Record<string, never>;
 
-interface SlackConfigModel extends Model<ISlackConfig, {}, ISlackConfigMethods> {
+// Fix empty object type by using Record<string, never>
+interface SlackConfigModel extends Model<ISlackConfig, Record<string, never>, ISlackConfigMethods> {
   getSingletonConfig(): Promise<ISlackConfig | null>;
   updateConfig(configData: Partial<ISlackConfig>): Promise<ISlackConfig>;
 }
@@ -81,14 +81,6 @@ SlackConfigSchema.statics.updateConfig = async function(configData: Partial<ISla
     return this.create(configData);
   }
 };
-
-// Replace the empty interface with a properly defined interface
-interface SlackConfig {
-  bot_token: string;
-  enabled: boolean;
-  channel_id: string;
-  dayRange?: number;
-}
 
 export default (mongoose.models.SlackConfig as SlackConfigModel) || 
   mongoose.model<ISlackConfig, SlackConfigModel>('SlackConfig', SlackConfigSchema);
