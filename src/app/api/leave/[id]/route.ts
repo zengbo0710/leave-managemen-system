@@ -23,10 +23,11 @@ export async function GET(
       { success: true, data: leaveRequest },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error fetching leave request:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch leave request';
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch leave request' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -61,10 +62,11 @@ export async function PUT(
       { success: true, data: updatedLeave },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error updating leave request:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update leave request';
     return NextResponse.json(
-      { error: error.message || 'Failed to update leave request' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -94,10 +96,11 @@ export async function DELETE(
       { success: true, message: 'Leave request deleted successfully' },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error deleting leave request:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete leave request';
     return NextResponse.json(
-      { error: error.message || 'Failed to delete leave request' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

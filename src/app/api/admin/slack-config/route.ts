@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db-utils';
+import { sendLeavesSummary, getSlackClient } from '@/lib/slack';
 import jwt from 'jsonwebtoken';
 
 // Custom JWT Payload interface
@@ -30,7 +31,7 @@ async function authorizeAdmin(request: NextRequest) {
   let decoded: CustomJwtPayload;
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-  } catch (_error) {
+  } catch {
     return {
       authorized: false,
       response: NextResponse.json(
@@ -229,9 +230,6 @@ export async function PATCH(request: NextRequest) {
     // Check if we're sending a test message or summary
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
-    
-    // Import slack lib
-    const { sendLeavesSummary, getSlackClient } = require('@/lib/slack');
     
     if (action === 'test') {
       // Send a test message

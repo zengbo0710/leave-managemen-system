@@ -88,10 +88,11 @@ export async function GET(request: NextRequest) {
       );
     }
     
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error in scheduled Slack notification:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json(
-      { error: error.message || 'An unexpected error occurred' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

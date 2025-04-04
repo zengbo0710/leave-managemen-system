@@ -48,11 +48,17 @@ export async function POST(request: NextRequest) {
       { success: true, data: userResponse },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error registering user:', error);
-    console.error('Error stack:', error.stack);
+    
+    // Only log stack trace if it's an Error object
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack);
+    }
+    
+    const errorMessage = error instanceof Error ? error.message : 'Failed to register user';
     return NextResponse.json(
-      { error: error.message || 'Failed to register user' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
