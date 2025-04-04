@@ -46,8 +46,9 @@ export const pool = (() => {
       ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
       ...connectionOptions
     });
-  } catch (initError) {
-    console.error('Error initializing database pool:', initError);
+  } catch (initError: Error | unknown) {
+    const errorMessage = initError instanceof Error ? initError.message : String(initError);
+    console.error('Error initializing database pool:', errorMessage);
     throw initError;
   }
 })();
@@ -72,8 +73,9 @@ export async function isDatabaseAccessible() {
     await client.connect();
     await client.end();
     return true;
-  } catch (error) {
-    console.error('Database not accessible:', error.message);
+  } catch (error: Error | unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Database not accessible:', errorMessage);
     return false;
   }
 }
@@ -87,18 +89,22 @@ export async function testConnection() {
     const result = await client.query('SELECT NOW() as current_time');
     console.log('Successfully connected to PostgreSQL database', result.rows[0]);
     return true;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error connecting to PostgreSQL database:', error);
     
     // Provide more detailed error information
-    if (error.code === 'ECONNREFUSED') {
-      console.error('Connection refused. Check if your database server is running and accessible.');
-    } else if (error.code === 'ENOTFOUND') {
-      console.error('Host not found. Check your DB_HOST or DATABASE_URL setting.');
-    } else if (error.code === '28P01') {
-      console.error('Authentication failed. Check your database username and password.');
-    } else if (error.code === '3D000') {
-      console.error('Database does not exist. Check your DB_NAME setting.');
+    if (error instanceof Error && 'code' in error) {
+      const pgError = error as Error & { code: string };
+      
+      if (pgError.code === 'ECONNREFUSED') {
+        console.error('Connection refused. Check if your database server is running and accessible.');
+      } else if (pgError.code === 'ENOTFOUND') {
+        console.error('Host not found. Check your DB_HOST or DATABASE_URL setting.');
+      } else if (pgError.code === '28P01') {
+        console.error('Authentication failed. Check your database username and password.');
+      } else if (pgError.code === '3D000') {
+        console.error('Database does not exist. Check your DB_NAME setting.');
+      }
     }
     
     return false;
@@ -301,7 +307,16 @@ export async function query(text: string, params?: any[]) {
     try {
       const client = await pool.connect();
       try {
+        // Explicitly set search path to public schema
+        console.log('[DB Query] Setting search_path to public');
+        await client.query('SET search_path TO public');
+        
+        // Log the query being executed
+        console.log(`[DB Query] Executing: ${text}`, params);
+        
+        // Run the actual query
         const res = await client.query(text, params);
+        console.log(`[DB Query] Success with ${res.rowCount} rows`);
         return res;
       } finally {
         client.release();

@@ -69,9 +69,13 @@ export async function POST(req: NextRequest) {
         { expiresIn: '1d' }
       );
       
+      // Format response to match what AuthContext expects
       return NextResponse.json({
+        success: true,
         token,
-        user: userWithoutPassword
+        user: userWithoutPassword,
+        // Include data field for backward compatibility
+        data: userWithoutPassword
       });
       
     } catch (dbError: any) {

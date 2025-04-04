@@ -54,10 +54,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('Login response:', response.data); // Debug the response structure
       
       // Check the response structure and extract data correctly
-      const userData = response.data.data;
+      console.log('Login response:', response.data);
+      
+      // Handle both API response formats for backward compatibility
+      const userData = response.data.user || response.data.data;
       const authToken = response.data.token;
       
       if (!userData || !authToken) {
+        console.error('Invalid response structure:', response.data);
         throw new Error('Invalid response structure from server');
       }
       
