@@ -165,7 +165,8 @@ const SlackConfigPage = () => {
         throw new Error('Authentication token not found');
       }
       
-      const response = await axios.patch('/api/admin/slack-config?action=test', {}, {
+      // Send the test message and ignore the response
+      await axios.patch('/api/admin/slack-config?action=test', {}, {
         headers: {
           Authorization: `Bearer ${authToken}`
         }
@@ -198,7 +199,8 @@ const SlackConfigPage = () => {
         throw new Error('Authentication token not found');
       }
       
-      const response = await axios.patch('/api/admin/slack-config?action=summary', {}, {
+      // Send the summary message and ignore the response
+      await axios.patch('/api/admin/slack-config?action=summary', {}, {
         headers: {
           Authorization: `Bearer ${authToken}`
         }
