@@ -1,8 +1,17 @@
 import { WebClient } from '@slack/web-api';
 import { query } from './db-utils';
 
+// Define SlackConfig interface to replace the 'any' type
+interface SlackConfig {
+  bot_token: string;
+  enabled: boolean;
+  channel_id: string;
+  dayRange?: number;
+  channelId?: string;
+}
+
 // This function loads the Slack config from database and creates a client
-export async function getSlackClient(): Promise<{ client: WebClient | null, config: any | null }> {
+export async function getSlackClient(): Promise<{ client: WebClient | null, config: SlackConfig | null }> {
   try {
     // Get the latest config from the database
     const result = await query(
@@ -40,7 +49,7 @@ interface LeaveNotificationData {
 }
 
 // Send a notification for a single leave request
-export async function sendLeaveNotification(leaveData: LeaveNotificationData): Promise<void> {
+export async function sendLeaveNotification(leaveData: LeaveNotificationData): Promise<boolean> {
   const { client, config } = await getSlackClient();
   
   if (!client || !config || !config.channel_id) {
@@ -159,8 +168,8 @@ export async function sendLeavesSummary() {
       return false;
     }
     
-    // Import models locally to avoid circular dependencies
-    const Leave = require('../models/Leave').default;
+    // Import models using dynamic import to avoid circular dependencies
+    const { default: Leave } = await import('../models/Leave');
     
     // Get today's date
     const today = new Date();
