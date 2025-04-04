@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db';
-import Leave from '@/models/Leave';
-import User from '@/models/User';
+import { query } from '@/lib/db-utils';
 import { sendLeaveNotification } from '@/lib/slack';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 
@@ -13,7 +11,6 @@ interface CustomJwtPayload extends JwtPayload {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectToDatabase();
     const data = await request.json();
     
     // Extract the token from the Authorization header
@@ -38,7 +35,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const userId = decoded.id;
+    const userId = parseInt(decoded.id);
     const { startDate, endDate, leaveType, reason, halfDay } = data;
     
     if (!startDate || !endDate || !leaveType) {
@@ -49,18 +46,26 @@ export async function POST(request: NextRequest) {
     }
     
     // Create the leave request with default status as 'approved'
-    const leaveRequest = await Leave.create({
-      user: userId,
-      startDate,
-      endDate,
-      leaveType,
-      reason,
-      status: 'approved', // Set default status to approved
-      halfDay: halfDay || { isHalfDay: false, period: null }
-    });
+    const isHalfDayValue = halfDay?.isHalfDay || false;
+    const periodValue = halfDay?.period || null;
+    
+    const leaveResult = await query(
+      `INSERT INTO leaves 
+       (user_id, start_date, end_date, leave_type, reason, status, is_half_day, period) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       RETURNING *`,
+      [userId, startDate, endDate, leaveType, reason, 'approved', isHalfDayValue, periodValue]
+    );
+    
+    const leaveRequest = leaveResult.rows[0];
     
     // Get user details for Slack notification
-    const user = await User.findById(userId);
+    const userResult = await query(
+      'SELECT * FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    const user = userResult.rows[0];
     
     if (user) {
       // Send Slack notification
@@ -70,14 +75,15 @@ export async function POST(request: NextRequest) {
         endDate: new Date(endDate),
         leaveType,
         reason,
-        isHalfDay: halfDay?.isHalfDay || false,
-        halfDayPeriod: halfDay?.period || undefined
+        isHalfDay: isHalfDayValue,
+        halfDayPeriod: periodValue
       });
       
       // Update leave request to mark that notification was sent
-      await Leave.findByIdAndUpdate(leaveRequest._id, {
-        slackNotificationSent: true
-      });
+      await query(
+        'UPDATE leaves SET slack_notification_sent = $1 WHERE id = $2',
+        [true, leaveRequest.id]
+      );
     }
     
     return NextResponse.json(
@@ -95,8 +101,6 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    await connectToDatabase();
-    
     // Extract the token from the Authorization header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -125,26 +129,57 @@ export async function GET(request: NextRequest) {
     
     // All users can see all leave requests, but filtered view is supported
     const queryUserId = searchParams.get('userId');
-    let query = {};
     
+    let leaveRequests;
     if (queryUserId) {
       // If a specific user ID is requested, filter by that
-      query = { user: queryUserId };
+      const result = await query(
+        `SELECT l.*, 
+                u.id as user_id, u.name as user_name, u.email as user_email, u.department as user_department
+         FROM leaves l
+         JOIN users u ON l.user_id = u.id
+         WHERE l.user_id = $1
+         ORDER BY l.created_at DESC`,
+        [parseInt(queryUserId)]
+      );
+      leaveRequests = result.rows;
     } else {
       // Otherwise, show all leave requests for everyone
-      query = {};
+      const result = await query(
+        `SELECT l.*, 
+                u.id as user_id, u.name as user_name, u.email as user_email, u.department as user_department
+         FROM leaves l
+         JOIN users u ON l.user_id = u.id
+         ORDER BY l.created_at DESC`,
+        []
+      );
+      leaveRequests = result.rows;
     }
     
-    // Make sure to fully populate user details
-    const leaveRequests = await Leave.find(query)
-      .populate({
-        path: 'user',
-        select: '_id name email department'
-      })
-      .sort({ createdAt: -1 });
+    // Format the response to match the expected structure in the frontend
+    const formattedLeaveRequests = leaveRequests.map(leave => ({
+      _id: leave.id,
+      user: {
+        _id: leave.user_id,
+        name: leave.user_name,
+        email: leave.user_email,
+        department: leave.user_department
+      },
+      startDate: leave.start_date,
+      endDate: leave.end_date,
+      leaveType: leave.leave_type,
+      halfDay: {
+        isHalfDay: leave.is_half_day,
+        period: leave.period
+      },
+      reason: leave.reason,
+      status: leave.status,
+      approvedBy: leave.approved_by_id,
+      createdAt: leave.created_at
+    }));
     
     return NextResponse.json(
-      leaveRequests,
+      formattedLeaveRequests,
       { status: 200 }
     );
   } catch (error: any) {
@@ -158,8 +193,6 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await connectToDatabase();
-    
     // Extract the token from the Authorization header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -182,7 +215,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
     
-    const userId = decoded.id;
+    const userId = parseInt(decoded.id);
     const isAdmin = decoded.role === 'admin';
     
     // Get data from request body
@@ -204,17 +237,22 @@ export async function PATCH(request: NextRequest) {
     }
     
     // Find the leave request first to check ownership
-    const leave = await Leave.findById(id);
+    const leaveResult = await query(
+      'SELECT * FROM leaves WHERE id = $1',
+      [id]
+    );
     
-    if (!leave) {
+    if (leaveResult.rows.length === 0) {
       return NextResponse.json(
         { error: 'Leave request not found' },
         { status: 404 }
       );
     }
     
+    const leave = leaveResult.rows[0];
+    
     // Check if the user owns this leave request or is admin
-    if (leave.user.toString() !== userId && !isAdmin) {
+    if (leave.user_id !== userId && !isAdmin) {
       return NextResponse.json(
         { error: 'You do not have permission to edit this leave request' },
         { status: 403 }
@@ -222,22 +260,50 @@ export async function PATCH(request: NextRequest) {
     }
     
     // Update the leave request
-    const updatedLeave = await Leave.findByIdAndUpdate(
-      id,
-      {
-        startDate,
-        endDate,
-        leaveType,
-        reason,
-        halfDay,
-      },
-      { new: true }
-    ).populate({
-      path: 'user',
-      select: '_id name email department'
-    });
+    const isHalfDayValue = halfDay?.isHalfDay || false;
+    const periodValue = halfDay?.period || null;
     
-    return NextResponse.json(updatedLeave, { status: 200 });
+    const updatedLeaveResult = await query(
+      `UPDATE leaves 
+       SET start_date = $1, end_date = $2, leave_type = $3, reason = $4, is_half_day = $5, period = $6, updated_at = NOW()
+       WHERE id = $7
+       RETURNING *`,
+      [startDate, endDate, leaveType, reason, isHalfDayValue, periodValue, id]
+    );
+    
+    const updatedLeave = updatedLeaveResult.rows[0];
+    
+    // Get user details for the updated leave
+    const userResult = await query(
+      'SELECT id, name, email, department FROM users WHERE id = $1',
+      [updatedLeave.user_id]
+    );
+    
+    const user = userResult.rows[0];
+    
+    // Format response for frontend compatibility
+    const formattedLeave = {
+      _id: updatedLeave.id,
+      user: {
+        _id: user.id,
+        name: user.name,
+        email: user.email,
+        department: user.department
+      },
+      startDate: updatedLeave.start_date,
+      endDate: updatedLeave.end_date,
+      leaveType: updatedLeave.leave_type,
+      halfDay: {
+        isHalfDay: updatedLeave.is_half_day,
+        period: updatedLeave.period
+      },
+      reason: updatedLeave.reason,
+      status: updatedLeave.status,
+      approvedBy: updatedLeave.approved_by_id,
+      createdAt: updatedLeave.created_at
+    };
+    
+    return NextResponse.json(formattedLeave, { status: 200 });
   } catch (error: any) {
     console.error('Error updating leave request:', error);
     return NextResponse.json(
@@ -249,8 +315,6 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await connectToDatabase();
-    
     // Extract the token from the Authorization header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -273,7 +337,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
     
-    const userId = decoded.id;
+    const userId = parseInt(decoded.id);
     const isAdmin = decoded.role === 'admin';
     
     // Get the leave ID from the URL
@@ -288,17 +352,22 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Find the leave request first to check ownership
-    const leave = await Leave.findById(leaveId);
+    const leaveResult = await query(
+      'SELECT * FROM leaves WHERE id = $1',
+      [leaveId]
+    );
     
-    if (!leave) {
+    if (leaveResult.rows.length === 0) {
       return NextResponse.json(
         { error: 'Leave request not found' },
         { status: 404 }
       );
     }
     
+    const leave = leaveResult.rows[0];
+    
     // Check if the user owns this leave request or is admin
-    if (leave.user.toString() !== userId && !isAdmin) {
+    if (leave.user_id !== userId && !isAdmin) {
       return NextResponse.json(
         { error: 'You do not have permission to delete this leave request' },
         { status: 403 }
@@ -306,7 +375,10 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Delete the leave request
-    await Leave.findByIdAndDelete(leaveId);
+    await query(
+      'DELETE FROM leaves WHERE id = $1',
+      [leaveId]
+    );
     
     return NextResponse.json(
       { message: 'Leave request deleted successfully' },

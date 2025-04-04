@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db';
-import SlackConfig from '@/models/SlackConfig';
+import { query } from '@/lib/db-utils';
 import jwt from 'jsonwebtoken';
 
 // Custom JWT Payload interface
@@ -64,22 +63,30 @@ export async function GET(request: NextRequest) {
       return auth.response;
     }
     
-    await connectToDatabase();
-    
     // Get the Slack configuration
-    const config = await SlackConfig.getSingletonConfig();
+    const result = await query(
+      'SELECT * FROM slack_configs LIMIT 1',
+      []
+    );
     
-    if (!config) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { message: 'No Slack configuration found' },
         { status: 404 }
       );
     }
     
+    const config = result.rows[0];
+    
     // Return the config without the token for security
     return NextResponse.json({
-      ...config.toObject(),
-      token: config.token ? '•••••••••••••••••••••••••••' : '',  // Mask the token
+      id: config.id,
+      webhook_url: config.webhook_url,
+      channel_id: config.channel_id,
+      enabled: config.enabled,
+      bot_token: config.bot_token ? '•••••••••••••••••••••••••••' : '',  // Mask the token
+      created_at: config.created_at,
+      updated_at: config.updated_at
     }, { status: 200 });
     
   } catch (error: any) {
@@ -100,18 +107,12 @@ export async function POST(request: NextRequest) {
       return auth.response;
     }
     
-    await connectToDatabase();
-    
     // Get data from request body
     const data = await request.json();
     const { 
       token, 
       channelId, 
-      enabled, 
-      dayRange,
-      scheduleEnabled,
-      scheduleTime,
-      scheduleWorkdaysOnly 
+      enabled 
     } = data;
     
     // Validate required fields
@@ -122,37 +123,44 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Validate dayRange
-    if (dayRange && (dayRange < 1 || dayRange > 30)) {
-      return NextResponse.json(
-        { error: 'Day range must be between 1 and 30' },
-        { status: 400 }
+    // Check if a configuration already exists
+    const existingConfig = await query(
+      'SELECT * FROM slack_configs LIMIT 1',
+      []
+    );
+    
+    let result;
+    
+    if (existingConfig.rows.length > 0) {
+      // Update existing configuration
+      result = await query(
+        `UPDATE slack_configs 
+         SET webhook_url = $1, channel_id = $2, bot_token = $3, enabled = $4, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $5 
+         RETURNING *`,
+        [data.webhookUrl || null, channelId, token, enabled !== undefined ? enabled : true, existingConfig.rows[0].id]
+      );
+    } else {
+      // Create new configuration
+      result = await query(
+        `INSERT INTO slack_configs (webhook_url, channel_id, bot_token, enabled) 
+         VALUES ($1, $2, $3, $4) 
+         RETURNING *`,
+        [data.webhookUrl || null, channelId, token, enabled !== undefined ? enabled : true]
       );
     }
     
-    // Validate scheduleTime format if provided
-    if (scheduleTime && !/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(scheduleTime)) {
-      return NextResponse.json(
-        { error: 'Schedule time must be in the format HH:MM' },
-        { status: 400 }
-      );
-    }
-    
-    // Create or update config
-    const updatedConfig = await SlackConfig.updateConfig({
-      token,
-      channelId,
-      enabled: enabled !== undefined ? enabled : true,
-      dayRange: dayRange || 3,
-      scheduleEnabled: scheduleEnabled !== undefined ? scheduleEnabled : true,
-      scheduleTime: scheduleTime || '08:30',
-      scheduleWorkdaysOnly: scheduleWorkdaysOnly !== undefined ? scheduleWorkdaysOnly : true,
-    });
+    const updatedConfig = result.rows[0];
     
     // Return the updated config without the token for security
     return NextResponse.json({
-      ...updatedConfig.toObject(),
-      token: '•••••••••••••••••••••••••••',  // Mask the token
+      id: updatedConfig.id,
+      webhook_url: updatedConfig.webhook_url,
+      channel_id: updatedConfig.channel_id,
+      enabled: updatedConfig.enabled,
+      bot_token: '•••••••••••••••••••••••••••',  // Mask the token
+      created_at: updatedConfig.created_at,
+      updated_at: updatedConfig.updated_at
     }, { status: 200 });
     
   } catch (error: any) {
@@ -173,12 +181,13 @@ export async function DELETE(request: NextRequest) {
       return auth.response;
     }
     
-    await connectToDatabase();
+    // Check if configuration exists
+    const existingConfig = await query(
+      'SELECT * FROM slack_configs LIMIT 1',
+      []
+    );
     
-    // Find the config
-    const config = await SlackConfig.getSingletonConfig();
-    
-    if (!config) {
+    if (existingConfig.rows.length === 0) {
       return NextResponse.json(
         { message: 'No Slack configuration found' },
         { status: 404 }
@@ -186,7 +195,10 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Delete the config
-    await SlackConfig.findByIdAndDelete(config._id);
+    await query(
+      'DELETE FROM slack_configs WHERE id = $1',
+      [existingConfig.rows[0].id]
+    );
     
     return NextResponse.json(
       { message: 'Slack configuration deleted successfully' },
@@ -210,8 +222,6 @@ export async function PATCH(request: NextRequest) {
     if (!auth.authorized) {
       return auth.response;
     }
-    
-    await connectToDatabase();
     
     // Check if we're sending a test message or summary
     const { searchParams } = new URL(request.url);

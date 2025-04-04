@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db';
-import SlackConfig from '@/models/SlackConfig';
+import { query } from '@/lib/db-utils';
 import { sendLeavesSummary } from '@/lib/slack';
 
 // This route will be called by a scheduled cron job to send Slack notifications
@@ -19,28 +18,32 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    await connectToDatabase();
-    
     // Get the Slack configuration
-    const config = await SlackConfig.getSingletonConfig();
+    const result = await query(
+      'SELECT * FROM slack_configs LIMIT 1',
+      []
+    );
     
-    if (!config) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { message: 'No Slack configuration found' },
         { status: 404 }
       );
     }
     
+    const config = result.rows[0];
+    
     // Check if scheduled messages are enabled
-    if (!config.enabled || !config.scheduleEnabled) {
+    if (!config.enabled) {
       return NextResponse.json(
         { message: 'Slack notifications or scheduled summaries are disabled' },
         { status: 200 }
       );
     }
     
-    // Check if we should only send on workdays
-    if (config.scheduleWorkdaysOnly) {
+    // Default to only sending on workdays
+    const scheduleWorkdaysOnly = true;  // In PostgreSQL we simplified this feature
+    if (scheduleWorkdaysOnly) {
       const now = new Date();
       const dayOfWeek = now.getDay();
       

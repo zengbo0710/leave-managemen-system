@@ -7,6 +7,8 @@ import axios from 'axios';
 import Image from 'next/image';
 import Link from 'next/link';
 import ChangePasswordModal from '@/components/ChangePasswordModal';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 type Leave = {
   _id: string;
@@ -138,10 +140,30 @@ export default function Dashboard() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
+    
+    if (name === 'startDate') {
+      // If start date is changed and is after current end date, update the end date as well
+      const startDate = new Date(value);
+      const currentEndDate = new Date(formData.endDate);
+      
+      if (!formData.endDate || startDate > currentEndDate) {
+        setFormData({
+          ...formData,
+          startDate: value,
+          endDate: value // Set end date to match the new start date
+        });
+      } else {
+        setFormData({
+          ...formData,
+          [name]: value
+        });
+      }
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -260,6 +282,23 @@ export default function Dashboard() {
           period: value as 'morning' | 'afternoon' | null
         }
       });
+    } else if (name === 'startDate') {
+      // If start date is changed and is after current end date, update the end date as well
+      const startDate = new Date(value);
+      const currentEndDate = new Date(editFormData.endDate);
+      
+      if (!editFormData.endDate || startDate > currentEndDate) {
+        setEditFormData({
+          ...editFormData,
+          startDate: value,
+          endDate: value // Set end date to match the new start date
+        });
+      } else {
+        setEditFormData({
+          ...editFormData,
+          [name]: value
+        });
+      }
     } else {
       setEditFormData({
         ...editFormData,
@@ -328,28 +367,53 @@ export default function Dashboard() {
                   <label htmlFor="editStartDate" className="block text-sm font-medium text-gray-700">
                     Start Date
                   </label>
-                  <input
-                    type="date"
+                  <DatePicker
                     id="editStartDate"
-                    name="startDate"
-                    required
-                    value={editFormData.startDate}
-                    onChange={handleEditInputChange}
+                    selected={editFormData.startDate ? new Date(editFormData.startDate) : null}
+                    onChange={(date: Date | null) => {
+                      if (date) {
+                        const formattedDate = date.toISOString().split('T')[0];
+                        const endDate = editFormData.endDate ? new Date(editFormData.endDate) : null;
+                        
+                        if (!endDate || date > endDate) {
+                          // If start date is after end date, set end date to match start date
+                          setEditFormData({
+                            ...editFormData,
+                            startDate: formattedDate,
+                            endDate: formattedDate
+                          });
+                        } else {
+                          setEditFormData({
+                            ...editFormData,
+                            startDate: formattedDate
+                          });
+                        }
+                      }
+                    }}
+                    dateFormat="yyyy-MM-dd"
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required
                   />
                 </div>
                 <div>
                   <label htmlFor="editEndDate" className="block text-sm font-medium text-gray-700">
                     End Date
                   </label>
-                  <input
-                    type="date"
+                  <DatePicker
                     id="editEndDate"
-                    name="endDate"
-                    required
-                    value={editFormData.endDate}
-                    onChange={handleEditInputChange}
+                    selected={editFormData.endDate ? new Date(editFormData.endDate) : null}
+                    onChange={(date: Date | null) => {
+                      if (date) {
+                        setEditFormData({
+                          ...editFormData,
+                          endDate: date.toISOString().split('T')[0]
+                        });
+                      }
+                    }}
+                    minDate={editFormData.startDate ? new Date(editFormData.startDate) : undefined}
+                    dateFormat="yyyy-MM-dd"
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required
                   />
                 </div>
                 <div>
@@ -564,28 +628,55 @@ export default function Dashboard() {
                         <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
                           Start Date
                         </label>
-                        <input
-                          type="date"
-                          name="startDate"
+                        <DatePicker
                           id="startDate"
-                          required
-                          value={formData.startDate}
-                          onChange={handleInputChange}
+                          selected={formData.startDate ? new Date(formData.startDate) : null}
+                          onChange={(date: Date | null) => {
+                            if (date) {
+                              const formattedDate = date.toISOString().split('T')[0];
+                              const endDate = formData.endDate ? new Date(formData.endDate) : null;
+                              
+                              if (!endDate || date > endDate) {
+                                // If start date is after end date, set end date to match start date
+                                setFormData({
+                                  ...formData,
+                                  startDate: formattedDate,
+                                  endDate: formattedDate
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  startDate: formattedDate
+                                });
+                              }
+                            }
+                          }}
+                          dateFormat="yyyy-MM-dd"
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          placeholderText="Select start date"
+                          required
                         />
                       </div>
                       <div>
                         <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
                           End Date
                         </label>
-                        <input
-                          type="date"
-                          name="endDate"
+                        <DatePicker
                           id="endDate"
-                          required
-                          value={formData.endDate}
-                          onChange={handleInputChange}
+                          selected={formData.endDate ? new Date(formData.endDate) : null}
+                          onChange={(date: Date | null) => {
+                            if (date) {
+                              setFormData({
+                                ...formData,
+                                endDate: date.toISOString().split('T')[0]
+                              });
+                            }
+                          }}
+                          minDate={formData.startDate ? new Date(formData.startDate) : undefined}
+                          dateFormat="yyyy-MM-dd"
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          placeholderText="Select end date"
+                          required
                         />
                       </div>
                       <div className="flex items-center my-4">

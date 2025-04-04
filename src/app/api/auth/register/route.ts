@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db';
-import User from '@/models/User';
+import { query } from '@/lib/db-utils';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
   try {
     console.log('Starting registration process');
-    await connectToDatabase();
-    console.log('DB connection successful');
     const { name, email, password, department } = await request.json();
     console.log('Received registration data:', { name, email, department });
     
     // Check if user exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    const existingUserResult = await query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
+    
+    if (existingUserResult.rows.length > 0) {
       return NextResponse.json(
         { error: 'User already exists with this email' },
         { status: 400 }
@@ -25,17 +26,18 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, salt);
     
     // Create user
-    const user = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      department,
-      role: 'employee' // Default role
-    });
+    const result = await query(
+      `INSERT INTO users (name, email, password, department, role)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, email, department, role`,
+      [name, email, hashedPassword, department, 'employee'] // Default role as employee
+    );
     
-    // Remove password from response
+    const user = result.rows[0];
+    
+    // Format response for frontend compatibility
     const userResponse = {
-      _id: user._id,
+      _id: user.id, // Map PostgreSQL id to _id for frontend compatibility
       name: user.name,
       email: user.email,
       department: user.department,

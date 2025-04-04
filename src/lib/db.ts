@@ -1,24 +1,21 @@
-import mongoose from 'mongoose';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import * as schema from './schema';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/leave-management';
+// PostgreSQL connection string
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://dd7orv:xau_twGqvVMEBinLjYrZd8df7vNzrv3qNb7i4@us-east-1.sql.xata.sh/lms-db:main?sslmode=require';
 
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable');
+if (!DATABASE_URL) {
+  throw new Error('Please define the DATABASE_URL environment variable');
 }
 
-let cachedConnection: typeof mongoose | null = null;
+// Create SQL client
+const client = postgres(DATABASE_URL, { max: 1 });
 
+// Create the database interface with Drizzle
+export const db = drizzle(client, { schema });
+
+// For backwards compatibility with existing code
 export async function connectToDatabase() {
-  if (cachedConnection) {
-    return { connection: cachedConnection };
-  }
-
-  try {
-    const connection = await mongoose.connect(MONGODB_URI);
-    cachedConnection = connection;
-    return { connection };
-  } catch (error) {
-    console.error('Error connecting to database:', error);
-    throw error;
-  }
+  return { connection: db };
 }

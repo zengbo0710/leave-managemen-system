@@ -1,20 +1,26 @@
 import { WebClient } from '@slack/web-api';
-import SlackConfig, { ISlackConfig } from '../models/SlackConfig';
-import { connectToDatabase } from '../lib/db';
+import { query } from './db-utils';
 
 // This function loads the Slack config from database and creates a client
-export async function getSlackClient(): Promise<{ client: WebClient | null, config: ISlackConfig | null }> {
+export async function getSlackClient(): Promise<{ client: WebClient | null, config: any | null }> {
   try {
-    await connectToDatabase();
-    
     // Get the latest config from the database
-    const config = await SlackConfig.getSingletonConfig();
+    const result = await query(
+      'SELECT * FROM slack_configs LIMIT 1',
+      []
+    );
     
-    if (!config || !config.token || !config.enabled) {
+    if (result.rows.length === 0) {
       return { client: null, config: null };
     }
     
-    const client = new WebClient(config.token);
+    const config = result.rows[0];
+    
+    if (!config || !config.bot_token || !config.enabled) {
+      return { client: null, config: null };
+    }
+    
+    const client = new WebClient(config.bot_token);
     return { client, config };
   } catch (error) {
     console.error('Error getting Slack client:', error);
@@ -34,12 +40,12 @@ export async function sendLeaveNotification(leaveData: {
 }) {
   const { client, config } = await getSlackClient();
   
-  if (!client || !config || !config.channelId) {
+  if (!client || !config || !config.channel_id) {
     console.error('Slack client or channel not configured');
     return false;
   }
   
-  const slackChannel = config.channelId;
+  const slackChannel = config.channel_id;
 
   try {
     const { userName, startDate, endDate, leaveType, reason, isHalfDay, halfDayPeriod } = leaveData;
@@ -143,11 +149,9 @@ export async function sendLeaveNotification(leaveData: {
 // Send a summary of upcoming leave requests
 export async function sendLeavesSummary() {
   try {
-    await connectToDatabase();
-    
     const { client, config } = await getSlackClient();
     
-    if (!client || !config || !config.channelId) {
+    if (!client || !config || !config.channel_id) {
       console.error('Slack client or channel not configured');
       return false;
     }

@@ -7,25 +7,36 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "setup-cron": "node scripts/setup-cron.js"
+    "setup-cron": "node scripts/setup-cron.js",
+    "generate": "drizzle-kit generate:pg",
+    "migrate": "tsx scripts/migrate.ts",
+    "seed": "tsx scripts/seed.ts",
+    "db:setup": "tsx scripts/setup-db.ts"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
     "@slack/web-api": "^7.8.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.9",
+    "@types/pg": "^8.11.11",
     "@types/react-datepicker": "^6.2.0",
     "axios": "^1.8.3",
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.3.1",
+    "drizzle-kit": "^0.30.6",
+    "drizzle-orm": "^0.41.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.12.1",
     "next": "15.2.2",
     "next-auth": "^4.24.11",
     "node-cron": "^3.0.3",
     "node-fetch": "^2.7.0",
+    "pg": "^8.14.1",
+    "postgres": "^3.4.5",
     "react": "^19.0.0",
     "react-datepicker": "^8.2.1",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tsx": "^4.19.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

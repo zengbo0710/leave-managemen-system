@@ -51,19 +51,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       const response = await axios.post('/api/auth/login', { email, password });
-      const { data, token } = response.data;
+      console.log('Login response:', response.data); // Debug the response structure
+      
+      // Check the response structure and extract data correctly
+      const userData = response.data.data;
+      const authToken = response.data.token;
+      
+      if (!userData || !authToken) {
+        throw new Error('Invalid response structure from server');
+      }
       
       // Save to state
-      setUser(data);
-      setToken(token);
+      setUser(userData);
+      setToken(authToken);
       setIsAuthenticated(true);
       
       // Save to localStorage
-      localStorage.setItem('user', JSON.stringify(data));
-      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('token', authToken);
       
       // Set default auth header for axios
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      axios.defaults.headers.common['Authorization'] = `Bearer ${authToken}`;
     } catch (error) {
       console.error('Login error:', error);
       throw error;
