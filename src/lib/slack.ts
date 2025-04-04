@@ -28,16 +28,19 @@ export async function getSlackClient(): Promise<{ client: WebClient | null, conf
   }
 }
 
-// Send a notification for a single leave request
-export async function sendLeaveNotification(leaveData: {
+// Fix Line 5:85 - Replace 'any' with a proper interface
+interface LeaveNotificationData {
   userName: string;
   startDate: Date;
   endDate: Date;
   leaveType: string;
-  reason: string;
-  isHalfDay: boolean;
-  halfDayPeriod?: string;
-}) {
+  reason?: string;
+  isHalfDay?: boolean;
+  halfDayPeriod?: string | null;
+}
+
+// Send a notification for a single leave request
+export async function sendLeaveNotification(leaveData: LeaveNotificationData): Promise<void> {
   const { client, config } = await getSlackClient();
   
   if (!client || !config || !config.channel_id) {
@@ -158,7 +161,6 @@ export async function sendLeavesSummary() {
     
     // Import models locally to avoid circular dependencies
     const Leave = require('../models/Leave').default;
-    const User = require('../models/User').default;
     
     // Get today's date
     const today = new Date();

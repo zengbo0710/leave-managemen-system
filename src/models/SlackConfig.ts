@@ -82,10 +82,12 @@ SlackConfigSchema.statics.updateConfig = async function(configData: Partial<ISla
   }
 };
 
+// Replace the empty interface with a properly defined interface
 interface SlackConfig {
-  webhookUrl: string;
-  channelId?: string;
-  // Add any other properties that should be in your SlackConfig
+  bot_token: string;
+  enabled: boolean;
+  channel_id: string;
+  dayRange?: number;
 }
 
 export default (mongoose.models.SlackConfig as SlackConfigModel) || 
