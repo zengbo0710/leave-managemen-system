@@ -124,11 +124,9 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    const userId = decoded.id;
     const { searchParams } = new URL(request.url);
-    const isAdmin = decoded.role === 'admin';
-    
-    // All users can see all leave requests, but filtered view is supported
+    // Remove unused variables
+    // We'll keep the queryUserId which is used
     const queryUserId = searchParams.get('userId');
     
     let leaveRequests;

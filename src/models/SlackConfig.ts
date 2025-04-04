@@ -82,5 +82,11 @@ SlackConfigSchema.statics.updateConfig = async function(configData: Partial<ISla
   }
 };
 
+interface SlackConfig {
+  webhookUrl: string;
+  channelId?: string;
+  // Add any other properties that should be in your SlackConfig
+}
+
 export default (mongoose.models.SlackConfig as SlackConfigModel) || 
   mongoose.model<ISlackConfig, SlackConfigModel>('SlackConfig', SlackConfigSchema);
