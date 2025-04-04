@@ -9,10 +9,11 @@ const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_
 
 // Create a PostgreSQL connection pool
 export const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false, // Required for some cloud database providers
-  },
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: Number(process.env.DB_PORT),
 });
 
 // Test database connection
@@ -204,13 +205,39 @@ export async function getConnection() {
   return await pool.connect();
 }
 
+// Configuration for connection retries
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
 // Run a query and return results
-export async function query(text: string, params: Record<string, unknown>[] = []) {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(text, params);
-    return result;
-  } finally {
-    client.release();
+export async function query(text: string, params?: any[]) {
+  let retries = 0;
+  
+  while (true) {
+    try {
+      const client = await pool.connect();
+      try {
+        const res = await client.query(text, params);
+        return res;
+      } finally {
+        client.release();
+      }
+    } catch (error: any) {
+      retries++;
+      console.error(`Database connection error (attempt ${retries}/${MAX_RETRIES}):`, {
+        error: error.message,
+        code: error.code,
+        host: pool.options?.host || 'unknown',
+        port: pool.options?.port || 'unknown',
+      });
+      
+      if (retries >= MAX_RETRIES || error.code !== 'ECONNREFUSED') {
+        console.error('Database connection failed after maximum retry attempts or non-connection error');
+        throw error;
+      }
+      
+      console.log(`Retrying database connection in ${RETRY_DELAY}ms...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+    }
   }
 }
