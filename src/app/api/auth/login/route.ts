@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Validate email and password
-    const { email, password: _ } = await request.json();
+    const { email } = await request.json();
     
     if (!email) {
       return NextResponse.json(
@@ -43,8 +43,9 @@ export async function POST(request: NextRequest) {
 
       const user = userResult.rows[0];
 
-      // Verify password
-      const isPasswordValid = await bcrypt.compare(_, user.password);
+      // Verify password (using request.json() input)
+      const requestBody = await request.json();
+      const isPasswordValid = await bcrypt.compare(requestBody.password, user.password);
       
       if (!isPasswordValid) {
         return NextResponse.json(
