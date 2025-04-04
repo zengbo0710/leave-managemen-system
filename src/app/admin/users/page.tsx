@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -38,8 +38,8 @@ export default function UserManagement() {
     }
   }, [user, router]);
 
-  // Fetch users
-  const fetchUsers = async () => {
+  // Fetch users using useCallback to prevent recreating on every render
+  const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     setError('');
 
@@ -57,19 +57,20 @@ export default function UserManagement() {
 
       const data = await response.json();
       setUsers(data);
-    } catch (err: any) {
-      setError(err.message || 'Error fetching users');
+    } catch (err: Error | unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error fetching users';
+      setError(errorMessage);
       console.error('Error fetching users:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [getToken]);
 
   useEffect(() => {
     if (user && user.role === 'admin') {
       fetchUsers();
     }
-  }, [user]);
+  }, [user, fetchUsers]);
 
   // Handle user actions
   const handleAddUser = () => {

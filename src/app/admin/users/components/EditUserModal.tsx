@@ -85,8 +85,9 @@ export default function EditUserModal({ isOpen, onClose, user, onUserUpdated }: 
       }
 
       onUserUpdated();
-    } catch (err: any) {
-      setError(err.message || 'Error updating user');
+    } catch (err: Error | unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error updating user';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

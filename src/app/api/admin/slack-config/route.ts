@@ -30,7 +30,7 @@ async function authorizeAdmin(request: NextRequest) {
   let decoded: CustomJwtPayload;
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-  } catch (error) {
+  } catch (_error) {
     return {
       authorized: false,
       response: NextResponse.json(
@@ -89,10 +89,11 @@ export async function GET(request: NextRequest) {
       updated_at: config.updated_at
     }, { status: 200 });
     
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error retrieving Slack configuration:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json(
-      { error: error.message || 'An unexpected error occurred' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -163,10 +164,11 @@ export async function POST(request: NextRequest) {
       updated_at: updatedConfig.updated_at
     }, { status: 200 });
     
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error updating Slack configuration:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json(
-      { error: error.message || 'An unexpected error occurred' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -205,10 +207,11 @@ export async function DELETE(request: NextRequest) {
       { status: 200 }
     );
     
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error deleting Slack configuration:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json(
-      { error: error.message || 'An unexpected error occurred' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -297,10 +300,11 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       );
     }
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error testing Slack configuration:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json(
-      { error: error.message || 'An unexpected error occurred' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

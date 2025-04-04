@@ -50,8 +50,9 @@ export default function AddUserModal({ isOpen, onClose, onUserAdded }: AddUserMo
       }
 
       onUserAdded();
-    } catch (err: any) {
-      setError(err.message || 'Error creating user');
+    } catch (err: Error | unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error creating user';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
