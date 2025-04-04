@@ -1,5 +1,5 @@
 const { MongoClient } = require('mongodb');
-const bcrypt = require('bcryptjs');
+import bcrypt from 'bcryptjs';
 const { ObjectId } = require('mongodb');
 
 // Connection URL

@@ -11,12 +11,12 @@
  * Requires: node-cron, node-fetch, and dotenv
  */
 
-const cron = require('node-cron');
-const fetch = require('node-fetch');
-const dotenv = require('dotenv');
+import cron from 'node-cron';
+import fetch from 'node-fetch';
+import dotenv from 'dotenv';
 const { execSync } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+import path from 'path';
+import fs from 'fs';
 
 // Load environment variables
 dotenv.config();

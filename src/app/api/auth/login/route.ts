@@ -17,9 +17,9 @@ export async function POST(request: NextRequest) {
 
   try {
     // Validate email and password
-    const { email, password: _ } = await request.json();
+    const { email, password } = await request.json();
     
-    if (!email || !_) {
+    if (!email || !password) {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       const user = userResult.rows[0];
 
       // Verify password
-      const isPasswordValid = await bcrypt.compare(_, user.password);
+      const isPasswordValid = await bcrypt.compare(password, user.password);
       
       if (!isPasswordValid) {
         return NextResponse.json(
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       );
       
       // Remove password from user object before sending
-      const { password: __, ...userWithoutPassword } = user;
+      const { password, ...userWithoutPassword } = user;
       
       // Format response to match what AuthContext expects
       return NextResponse.json({

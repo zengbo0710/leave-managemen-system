@@ -1,7 +1,7 @@
 // Script to update the database connection in the .env file
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 const envFilePath = path.resolve(process.cwd(), '.env');
 const newDbUrl = 'postgresql://neondb_owner:npg_OjPk20aDJstd@ep-proud-frost-a1bx9pnf-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
