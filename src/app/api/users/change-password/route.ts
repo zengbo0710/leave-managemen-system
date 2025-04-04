@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     let decoded: CustomJwtPayload;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -75,10 +75,11 @@ export async function POST(request: NextRequest) {
       { message: 'Password updated successfully' },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error changing password:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to change password';
     return NextResponse.json(
-      { error: error.message || 'Failed to change password' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

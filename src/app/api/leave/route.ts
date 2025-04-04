@@ -124,9 +124,10 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    const userId = decoded.id;
+    // The following variables are used for type checking only, hence the underscore prefix
+    const _userId = decoded.id;
     const { searchParams } = new URL(request.url);
-    const isAdmin = decoded.role === 'admin';
+    const _isAdmin = decoded.role === 'admin';
     
     // All users can see all leave requests, but filtered view is supported
     const queryUserId = searchParams.get('userId');

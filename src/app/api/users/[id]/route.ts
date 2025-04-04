@@ -116,7 +116,15 @@ export async function PUT(
     }
     
     // Build update object
-    const updateData: any = {};
+    interface UpdateData {
+      name?: string;
+      email?: string;
+      password?: string;
+      role?: string;
+      department?: string;
+    }
+    
+    const updateData: UpdateData = {};
     if (name) updateData.name = name;
     if (email) updateData.email = email;
     if (password) updateData.password = await bcrypt.hash(password, 10);

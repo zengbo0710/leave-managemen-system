@@ -36,7 +36,7 @@ async function verifyAdminAccess(request: NextRequest) {
       };
     }
     return { success: true, userId: decoded.id };
-  } catch (error) {
+  } catch {
     return { 
       success: false, 
       response: NextResponse.json(
@@ -75,10 +75,11 @@ export async function GET(request: NextRequest) {
     }));
     
     return NextResponse.json(users, { status: 200 });
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error fetching users:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch users';
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch users' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -144,10 +145,11 @@ export async function POST(request: NextRequest) {
       { success: true, data: userResponse },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error creating user:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create user';
     return NextResponse.json(
-      { error: error.message || 'Failed to create user' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
