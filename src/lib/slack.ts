@@ -235,7 +235,7 @@ export async function sendLeavesSummary() {
           type: 'mrkdwn',
           text: `*${userName}* - ${leave.leaveType}: ${dateInfo}`
         }
-      } as any); // Using any to bypass type checking - in a real app, add proper Slack Block Kit types
+      } as Record<string, unknown>); // Using Record<string, unknown> to bypass type checking - in a real app, add proper Slack Block Kit types
     }
     
     // Add footer
@@ -245,7 +245,7 @@ export async function sendLeavesSummary() {
         type: 'mrkdwn',
         text: `Generated at ${new Date().toLocaleString()}`
       }
-    } as any); // Using any to bypass type checking - in a real app, add proper Slack Block Kit types
+    } as Record<string, unknown>); // Using Record<string, unknown> to bypass type checking - in a real app, add proper Slack Block Kit types
     
     // Send message to Slack
     await client.chat.postMessage({

@@ -264,7 +264,7 @@ export default function Dashboard() {
   };
   
   const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     
     if (name === 'isHalfDay') {
       setEditFormData({
@@ -318,7 +318,7 @@ export default function Dashboard() {
         throw new Error('No authentication token found');
       }
       
-      const response = await axios.patch('/api/leave', editFormData, {
+      await axios.patch('/api/leave', editFormData, {
         headers: {
           Authorization: `Bearer ${token}`
         }

@@ -205,7 +205,7 @@ export async function getConnection() {
 }
 
 // Run a query and return results
-export async function query(text: string, params: any[] = []) {
+export async function query(text: string, params: Record<string, unknown>[] = []) {
   const client = await pool.connect();
   try {
     const result = await client.query(text, params);
