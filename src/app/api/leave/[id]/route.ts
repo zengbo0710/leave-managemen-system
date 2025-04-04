@@ -1,38 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db';
+import dbConnect from '@/lib/dbConnect';
 import Leave from '@/models/Leave';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
+// GET handler for retrieving a specific leave request
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    await connectToDatabase();
-    const { id } = params;
+    await dbConnect();
     
-    const leaveRequest = await Leave.findById(id).populate('user', 'name email department');
+    const session = await getServerSession(authOptions);
     
-    if (!leaveRequest) {
-      return NextResponse.json(
-        { error: 'Leave request not found' },
-        { status: 404 }
-      );
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    return NextResponse.json(
-      { success: true, data: leaveRequest },
-      { status: 200 }
-    );
-  } catch (error: Error | unknown) {
-    console.error('Error fetching leave request:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch leave request';
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    const leave = await Leave.findById(params.id)
+      .populate('user', 'name email department')
+      .populate('approvedBy', 'name email');
+    
+    if (!leave) {
+      return NextResponse.json({ error: 'Leave not found' }, { status: 404 });
+    }
+    
+    return NextResponse.json(leave);
+  } catch (error) {
+    console.error('Error fetching leave:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
+// PUT handler for updating a leave request
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -72,6 +73,7 @@ export async function PUT(
   }
 }
 
+// DELETE handler for deleting a leave request
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
