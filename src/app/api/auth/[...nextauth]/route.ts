@@ -1,11 +1,35 @@
-import NextAuth from 'next-auth';
+import NextAuth, { 
+  AuthOptions, 
+  Session, 
+  User 
+} from 'next-auth';
+import { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { NextAuthOptions } from 'next-auth';
 import { query } from '@/lib/db-utils';
 import bcrypt from 'bcryptjs';
-import { NextRequest } from 'next/server';
 
-export const authOptions: NextAuthOptions = {
+// Extend the default Session type
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      role?: string;
+      department?: string;
+    }
+  }
+}
+
+// Extend the default JWT type
+declare module 'next-auth/jwt' {
+  interface JWT {
+    role?: string;
+    department?: string;
+  }
+}
+
+const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -64,14 +88,14 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: JWT, user?: User }) {
       if (user) {
         token.role = user.role;
         token.department = user.department;
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: Session, token: JWT }) {
       if (session.user) {
         session.user.role = token.role;
         session.user.department = token.department;
@@ -83,11 +107,4 @@ export const authOptions: NextAuthOptions = {
 
 const handler = NextAuth(authOptions);
 
-// Explicitly define GET and POST methods
-export async function GET(request: NextRequest) {
-  return handler(request);
-}
-
-export async function POST(request: NextRequest) {
-  return handler(request);
-}
+export { handler as GET, handler as POST };
