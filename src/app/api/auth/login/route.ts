@@ -1,71 +1,90 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db-utils';
 import bcrypt from 'bcryptjs';
+import { query } from '@/lib/db-utils';
 import jwt from 'jsonwebtoken';
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await request.json();
-    console.log('Login attempt for email:', email);
+    const { email, password } = await req.json();
     
-    // Check if user exists
-    const result = await query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
-    );
+    console.log(`Login attempt for email: ${email}`);
     
-    const user = result.rows[0];
-    if (!user) {
-      console.log('User not found with email:', email);
+    // Input validation
+    if (!email || !password) {
       return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
+        { error: 'Email and password are required' },
+        { status: 400 }
       );
     }
-    
-    // Verify password
-    console.log('Verifying password for user:', user.email);
-    const isMatch = await bcrypt.compare(password, user.password);
-    console.log('Password match result:', isMatch);
-    
-    if (!isMatch) {
-      console.log('Password verification failed for user:', user.email);
+
+    try {
+      // Query for the user with email
+      const result = await query(
+        'SELECT id, name, email, password, role, department FROM users WHERE email = $1',
+        [email]
+      );
+
+      // Check if user exists
+      if (result.rows.length === 0) {
+        return NextResponse.json(
+          { error: 'Invalid email or password' },
+          { status: 401 }
+        );
+      }
+
+      const user = result.rows[0];
+      
+      // Compare passwords
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      
+      if (!isPasswordValid) {
+        return NextResponse.json(
+          { error: 'Invalid email or password' },
+          { status: 401 }
+        );
+      }
+      
+      // Create JWT token
+      const JWT_SECRET = process.env.JWT_SECRET;
+      if (!JWT_SECRET) {
+        console.error('JWT_SECRET is not defined in environment variables');
+        return NextResponse.json(
+          { error: 'Server configuration error' },
+          { status: 500 }
+        );
+      }
+
+      // Remove password from user object before creating token
+      const { password: _, ...userWithoutPassword } = user;
+      
+      const token = jwt.sign(
+        { 
+          id: user.id, 
+          email: user.email,
+          role: user.role,
+          name: user.name,
+          department: user.department
+        },
+        JWT_SECRET,
+        { expiresIn: '1d' }
+      );
+      
+      return NextResponse.json({
+        token,
+        user: userWithoutPassword
+      });
+      
+    } catch (dbError: any) {
+      console.error('Database error during login:', dbError);
       return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
+        { error: 'Database error', details: dbError.message },
+        { status: 500 }
       );
     }
-    
-    // Create JWT token
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'default_secret',
-      { expiresIn: '7d' }
-    );
-    
-    // User data to return (without password)
-    const userData = {
-      _id: user.id, // Map PostgreSQL id to _id for frontend compatibility
-      name: user.name,
-      email: user.email,
-      department: user.department,
-      role: user.role
-    };
-    
-    console.log('Login successful for user:', user.email);
-    console.log('Generated token:', token);
-    console.log('Sending response with userData:', userData);
-    
-    // Create response object
-    const responseObj = { success: true, data: userData, token };
-    console.log('Full response object:', responseObj);
-    
-    return NextResponse.json(responseObj, { status: 200 });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error logging in:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to log in';
     return NextResponse.json(
-      { error: errorMessage },
+      { error: 'Login failed', details: error.message },
       { status: 500 }
     );
   }

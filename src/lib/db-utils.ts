@@ -4,28 +4,106 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-// Database connection string
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_OjPk20aDJstd@ep-proud-frost-a1bx9pnf-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+// Create a PostgreSQL connection pool with better configuration handling
+export const pool = (() => {
+  const DATABASE_URL = process.env.DATABASE_URL;
+  
+  // Log connection details for debugging (redacting password)
+  console.log('Database connection config:', {
+    using_connection_string: !!DATABASE_URL,
+    host: process.env.DB_HOST || 'from_connection_string',
+    database: process.env.DB_NAME || 'from_connection_string',
+    user: process.env.DB_USER || 'from_connection_string',
+    port: process.env.DB_PORT || 'from_connection_string'
+  });
+  
+  try {
+    // Common connection options for both methods
+    const connectionOptions = {
+      connectionTimeoutMillis: 5000, // 5 seconds timeout
+      idleTimeoutMillis: 30000,      // 30 seconds idle timeout
+      max: 10                        // Maximum connections in pool
+    };
+    
+    // If DATABASE_URL is available, use it
+    if (DATABASE_URL) {
+      console.log('Using DATABASE_URL for connection');
+      return new Pool({ 
+        connectionString: DATABASE_URL,
+        ...connectionOptions
+      });
+    }
+    
+    // Otherwise use individual connection parameters
+    console.log('Using individual connection parameters');
+    return new Pool({
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD,
+      port: Number(process.env.DB_PORT) || 5432,
+      // Add SSL configuration if needed
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+      ...connectionOptions
+    });
+  } catch (initError) {
+    console.error('Error initializing database pool:', initError);
+    throw initError;
+  }
+})();
 
-// Create a PostgreSQL connection pool
-export const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: Number(process.env.DB_PORT),
+// Register event handlers for the pool
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
 });
 
-// Test database connection
-export async function testConnection() {
+// Check if database is actually accessible
+export async function isDatabaseAccessible() {
   try {
-    const client = await pool.connect();
-    console.log('Successfully connected to PostgreSQL database');
-    client.release();
+    const { Client } = require('pg');
+    const config = pool.options;
+    
+    // Create a single client for testing connection
+    const client = new Client({
+      ...config,
+      connectionTimeoutMillis: 3000, // Short timeout for connection test
+    });
+    
+    await client.connect();
+    await client.end();
+    return true;
+  } catch (error) {
+    console.error('Database not accessible:', error.message);
+    return false;
+  }
+}
+
+// Test database connection with better error reporting
+export async function testConnection() {
+  let client;
+  
+  try {
+    client = await pool.connect();
+    const result = await client.query('SELECT NOW() as current_time');
+    console.log('Successfully connected to PostgreSQL database', result.rows[0]);
     return true;
   } catch (error) {
     console.error('Error connecting to PostgreSQL database:', error);
+    
+    // Provide more detailed error information
+    if (error.code === 'ECONNREFUSED') {
+      console.error('Connection refused. Check if your database server is running and accessible.');
+    } else if (error.code === 'ENOTFOUND') {
+      console.error('Host not found. Check your DB_HOST or DATABASE_URL setting.');
+    } else if (error.code === '28P01') {
+      console.error('Authentication failed. Check your database username and password.');
+    } else if (error.code === '3D000') {
+      console.error('Database does not exist. Check your DB_NAME setting.');
+    }
+    
     return false;
+  } finally {
+    if (client) client.release();
   }
 }
 
@@ -206,12 +284,18 @@ export async function getConnection() {
 }
 
 // Configuration for connection retries
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
+const MAX_RETRIES = 5;       // Increased from 3
+const RETRY_DELAY = 2000;    // Increased to 2 seconds
 
 // Run a query and return results
 export async function query(text: string, params?: any[]) {
   let retries = 0;
+  
+  // Check database accessibility first
+  const isAccessible = await isDatabaseAccessible();
+  if (!isAccessible) {
+    console.error('Database server is not accessible. Check your database connection settings and ensure the database server is running.');
+  }
   
   while (true) {
     try {
@@ -227,17 +311,81 @@ export async function query(text: string, params?: any[]) {
       console.error(`Database connection error (attempt ${retries}/${MAX_RETRIES}):`, {
         error: error.message,
         code: error.code,
-        host: pool.options?.host || 'unknown',
-        port: pool.options?.port || 'unknown',
+        query: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+        params: params ? JSON.stringify(params).substring(0, 100) : 'none'
       });
       
-      if (retries >= MAX_RETRIES || error.code !== 'ECONNREFUSED') {
-        console.error('Database connection failed after maximum retry attempts or non-connection error');
+      if (error.code === 'ECONNREFUSED') {
+        console.error('Connection refused. Check if your database server is running at the specified host and port.');
+      } else if (error.code === 'ETIMEDOUT') {
+        console.error('Connection timed out. Database server may be slow or unreachable.');
+      }
+      
+      if (retries >= MAX_RETRIES || (error.code !== 'ECONNREFUSED' && error.code !== 'ETIMEDOUT')) {
+        console.error('Database operation failed after maximum retry attempts or encountered a non-connection error');
         throw error;
       }
       
       console.log(`Retrying database connection in ${RETRY_DELAY}ms...`);
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
     }
+  }
+}
+
+// Specific function to check database connection for login page
+export async function checkLoginDatabaseConnection() {
+  console.log('Checking database connection for login page...');
+  
+  try {
+    // First check if database is accessible at all
+    const isAccessible = await isDatabaseAccessible();
+    
+    if (!isAccessible) {
+      console.error('Database is not accessible for login. Please check your database server.');
+      return {
+        success: false,
+        message: 'Database connection failed. Please contact system administrator.',
+        details: 'Database server is not accessible'
+      };
+    }
+    
+    // Then check if we can query the users table specifically
+    const client = await pool.connect();
+    try {
+      // Just check if the users table exists and is accessible
+      await client.query('SELECT COUNT(*) FROM users LIMIT 1');
+      
+      console.log('Login database connection check: SUCCESS');
+      return {
+        success: true,
+        message: 'Database connection successful'
+      };
+    } catch (error: any) {
+      console.error('Login database table check failed:', error.message);
+      
+      // Handle specific errors that might occur during login
+      if (error.code === '42P01') { // undefined_table
+        return {
+          success: false,
+          message: 'Database schema issue. Please run database setup.',
+          details: 'The users table does not exist'
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Database error. Please contact system administrator.',
+        details: error.message
+      };
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    console.error('Login database connection check failed with exception:', error);
+    return {
+      success: false,
+      message: 'Unable to verify database connection.',
+      details: error.message
+    };
   }
 }
