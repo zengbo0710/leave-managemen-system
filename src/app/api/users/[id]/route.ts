@@ -49,9 +49,10 @@ async function verifyAdminAccess(request: NextRequest) {
 }
 
 // GET a single user by ID (admin only)
+// @ts-ignore
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: any
 ) {
   try {
     await connectToDatabase();
@@ -61,7 +62,7 @@ export async function GET(
       return adminCheck.response;
     }
     
-    const user = await User.findById(params.id, { password: 0 });
+    const user = await User.findById(context.params.id, { password: 0 });
     
     if (!user) {
       return NextResponse.json(
@@ -81,9 +82,10 @@ export async function GET(
 }
 
 // PUT - Update a user (admin only)
+// @ts-ignore
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: any
 ) {
   try {
     await connectToDatabase();
@@ -96,7 +98,7 @@ export async function PUT(
     const { name, email, password, role, department } = await request.json();
     
     // Find user
-    const user = await User.findById(params.id);
+    const user = await User.findById(context.params.id);
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -133,7 +135,7 @@ export async function PUT(
     
     // Update user
     const updatedUser = await User.findByIdAndUpdate(
-      params.id,
+      context.params.id,
       updateData,
       { new: true, select: '-password' }
     );
@@ -149,9 +151,10 @@ export async function PUT(
 }
 
 // DELETE - Delete a user (admin only)
+// @ts-ignore
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: any
 ) {
   try {
     await connectToDatabase();
@@ -162,7 +165,7 @@ export async function DELETE(
     }
     
     // Check if user exists
-    const user = await User.findById(params.id);
+    const user = await User.findById(context.params.id);
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -182,7 +185,7 @@ export async function DELETE(
     }
     
     // Delete user
-    await User.findByIdAndDelete(params.id);
+    await User.findByIdAndDelete(context.params.id);
     
     return NextResponse.json(
       { message: 'User deleted successfully' },
