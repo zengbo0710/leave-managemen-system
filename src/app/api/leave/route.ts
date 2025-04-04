@@ -4,7 +4,7 @@ import { sendLeaveNotification } from '@/lib/slack';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 
 interface CustomJwtPayload extends JwtPayload {
-  id: string;
+  id: string;  // Keep as string consistently
   email: string;
   role: string;
 }
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const userId = parseInt(decoded.id);
+    const userId = parseInt(decoded.id, 10);  // Explicitly use base 10
     const { startDate, endDate, leaveType, reason, halfDay } = data;
     
     if (!startDate || !endDate || !leaveType) {
@@ -216,7 +216,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
     
-    const userId = parseInt(decoded.id);
+    const userId = parseInt(decoded.id, 10);  // Explicitly use base 10
     const isAdmin = decoded.role === 'admin';
     
     // Get data from request body
@@ -338,7 +338,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
     
-    const userId = parseInt(decoded.id);
+    const userId = parseInt(decoded.id, 10);  // Explicitly use base 10
     const isAdmin = decoded.role === 'admin';
     
     // Get the leave ID from the URL

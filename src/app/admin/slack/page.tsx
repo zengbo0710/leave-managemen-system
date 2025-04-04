@@ -62,16 +62,18 @@ const SlackConfigPage = () => {
       const config = response.data;
       setFormData({
         token: '',  // Don't populate the real token for security
-        channelId: config.channelId || '',
-        enabled: config.enabled,
-        dayRange: config.dayRange || 3,
-        scheduleEnabled: config.scheduleEnabled !== undefined ? config.scheduleEnabled : true,
-        scheduleTime: config.scheduleTime || '08:30',
-        scheduleWorkdaysOnly: config.scheduleWorkdaysOnly !== undefined ? config.scheduleWorkdaysOnly : true
+        channelId: config.channel_id || config.channelId || '',  // Handle both formats
+        enabled: config.enabled !== undefined ? config.enabled : true,
+        dayRange: config.day_range || config.dayRange || 3,
+        scheduleEnabled: config.schedule_enabled !== undefined ? config.schedule_enabled : 
+                         (config.scheduleEnabled !== undefined ? config.scheduleEnabled : true),
+        scheduleTime: config.schedule_time || config.scheduleTime || '08:30',
+        scheduleWorkdaysOnly: config.schedule_workdays_only !== undefined ? config.schedule_workdays_only :
+                              (config.scheduleWorkdaysOnly !== undefined ? config.scheduleWorkdaysOnly : true)
       });
       
       // For displaying masked token in UI
-      setSavedToken(config.token || '');
+      setSavedToken(config.token || config.bot_token || '');
       
       setMessage({ text: '', type: '' });
     } catch (error) {

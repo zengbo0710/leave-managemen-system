@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       { success: true, data: userResponse },
       { status: 201 }
     );
-  } catch (error: Error | unknown) {
+  } catch (error) {
     console.error('Error registering user:', error);
     
     // Only log stack trace if it's an Error object

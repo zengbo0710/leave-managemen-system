@@ -43,7 +43,7 @@ export default function DeleteUserModal({ isOpen, onClose, user, onUserDeleted }
       }
 
       onUserDeleted();
-    } catch (err: Error | unknown) {
+    } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error deleting user';
       setError(errorMessage);
     } finally {

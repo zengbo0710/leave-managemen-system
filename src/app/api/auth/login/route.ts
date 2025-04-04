@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     console.log('Full response object:', responseObj);
     
     return NextResponse.json(responseObj, { status: 200 });
-  } catch (error: Error | unknown) {
+  } catch (error) {
     console.error('Error logging in:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to log in';
     return NextResponse.json(

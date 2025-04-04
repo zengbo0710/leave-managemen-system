@@ -139,7 +139,7 @@ export async function PUT(
     );
     
     return NextResponse.json(updatedUser, { status: 200 });
-  } catch (error: Error | unknown) {
+  } catch (error) {
     console.error('Error updating user:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to update user' },
@@ -188,7 +188,7 @@ export async function DELETE(
       { message: 'User deleted successfully' },
       { status: 200 }
     );
-  } catch (error: Error | unknown) {
+  } catch (error) {
     console.error('Error deleting user:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to delete user' },
