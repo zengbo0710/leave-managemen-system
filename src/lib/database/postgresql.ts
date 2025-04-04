@@ -47,7 +47,7 @@ export const pool = (() => {
 export * from '../db-utils';
 
 // Simplified query function
-export async function pgQuery(text: string, params?: any[]) {
+export async function pgQuery(text: string, params?: (string | number | boolean | null)[]) {
   const client = await pool.connect();
   try {
     return await client.query(text, params);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
@@ -65,24 +65,7 @@ export default function Dashboard() {
   const [showEditModal, setShowEditModal] = useState(false);
   const router = useRouter();
 
-  // If not authenticated, redirect to login
-  useEffect(() => {
-    // Check if user is logged in
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-    
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    
-    fetchLeaves();
-  }, [isAuthenticated, router]);
-
-  const fetchLeaves = async () => {
+  const fetchLeaves = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -107,9 +90,25 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
-  
-  const handleSearch = () => {
+  }, [router]);
+
+  // If not authenticated, redirect to login
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    
+    fetchLeaves();
+  }, [isAuthenticated, router, fetchLeaves]);
+
+  const handleSearch = useCallback(() => {
     if (!searchTerm.trim()) {
       setFilteredLeaves(leaves);
       return;
@@ -131,12 +130,12 @@ export default function Dashboard() {
     });
     
     setFilteredLeaves(filtered);
-  };
+  }, [leaves, searchTerm, searchBy]);
   
   // Apply search when searchTerm or searchBy changes
   useEffect(() => {
     handleSearch();
-  }, [searchTerm, searchBy]);
+  }, [handleSearch]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -288,6 +287,7 @@ export default function Dashboard() {
       const currentEndDate = new Date(editFormData.endDate);
       
       if (!editFormData.endDate || startDate > currentEndDate) {
+        // If start date is after end date, set end date to match start date
         setEditFormData({
           ...editFormData,
           startDate: value,

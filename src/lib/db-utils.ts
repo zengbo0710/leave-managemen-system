@@ -61,11 +61,10 @@ pool.on('error', (err) => {
 // Check if database is actually accessible
 export async function isDatabaseAccessible() {
   try {
-    const { Client } = require('pg');
     const config = pool.options;
     
     // Create a single client for testing connection
-    const client = new Client({
+    const client = new (await import('pg')).Client({
       ...config,
       connectionTimeoutMillis: 3000, // Short timeout for connection test
     });
@@ -294,7 +293,7 @@ const MAX_RETRIES = 5;       // Increased from 3
 const RETRY_DELAY = 2000;    // Increased to 2 seconds
 
 // Run a query and return results
-export async function query(text: string, params?: any[]) {
+export async function query(text: string, params?: (string | number | boolean | null)[]) {
   let retries = 0;
   
   // Check database accessibility first

@@ -5,12 +5,12 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     // Validate email and password
-    const { email, password } = await req.json();
+    const { email, password: inputPassword } = await request.json();
     
-    if (!email || !password) {
+    if (!email || !inputPassword) {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       const user = userResult.rows[0];
 
       // Verify password
-      const isPasswordValid = await bcrypt.compare(password, user.password);
+      const isPasswordValid = await bcrypt.compare(inputPassword, user.password);
       
       if (!isPasswordValid) {
         return NextResponse.json(
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       );
       
       // Remove password from user object before sending
-      const { password: _, ...userWithoutPassword } = user;
+      const { password, ...userWithoutPassword } = user;
       
       // Format response to match what AuthContext expects
       return NextResponse.json({
@@ -86,10 +86,10 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (error: unknown) {
-    console.error('Error logging in:', error);
+    console.error('Error processing login request:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Login failed', details: errorMessage },
+      { error: 'Login request processing failed', details: errorMessage },
       { status: 500 }
     );
   }
