@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db-utils';
 import { sendLeaveNotification } from '@/lib/slack';
+import { syncLeaveToCalendar, deleteLeaveFromCalendar } from '@/lib/google-calendar';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 
 interface CustomJwtPayload extends JwtPayload {
@@ -9,38 +10,26 @@ interface CustomJwtPayload extends JwtPayload {
   role: string;
 }
 
-function extractTokenFromHeader(request: NextRequest): string | null {
-  const authHeader = request.headers.get('Authorization');
-  return authHeader?.startsWith('Bearer ') 
-    ? authHeader.split(' ')[1] 
-    : null;
-}
-
-function verifyToken(token: string): CustomJwtPayload | null {
-  try {
-    return jwt.verify(
-      token, 
-      process.env.JWT_SECRET || 'default_secret'
-    ) as CustomJwtPayload;
-  } catch {
-    return null;
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
     
-    const token = extractTokenFromHeader(request);
-    if (!token) {
+    // Extract the token from the Authorization header
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
         { error: 'Authorization token is required' },
         { status: 401 }
       );
     }
     
-    const decoded = verifyToken(token);
-    if (!decoded) {
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the token and extract user ID
+    let decoded: CustomJwtPayload;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
+    } catch {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -57,62 +46,73 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Create the leave request with default status as 'pending'
+    // Create the leave request with default status as 'approved'
     const isHalfDayValue = halfDay?.isHalfDay || false;
     const periodValue = halfDay?.period || null;
-
-    try {
-      const result = await query(
-        `INSERT INTO leaves 
-         (user_id, start_date, end_date, leave_type, reason, status, is_half_day, half_day_period)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id, user_id, start_date, end_date, leave_type, reason, status, is_half_day, half_day_period`,
-        [
-          userId, 
-          startDate, 
-          endDate, 
-          leaveType, 
-          reason || null, 
-          'pending', 
-          isHalfDayValue, 
-          periodValue
-        ]
+    
+    const leaveResult = await query(
+      `INSERT INTO leaves 
+       (user_id, start_date, end_date, leave_type, reason, status, is_half_day, period) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       RETURNING *`,
+      [userId, startDate, endDate, leaveType, reason, 'approved', isHalfDayValue, periodValue]
+    );
+    
+    const leaveRequest = leaveResult.rows[0];
+    
+    // Get user details for Slack notification
+    const userResult = await query(
+      'SELECT * FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    const user = userResult.rows[0];
+    
+    if (user) {
+      // Send Slack notification
+      await sendLeaveNotification({
+        userName: user.name,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        leaveType,
+        reason,
+        isHalfDay: isHalfDayValue,
+        halfDayPeriod: periodValue
+      });
+      
+      // Update leave request to mark that notification was sent
+      await query(
+        'UPDATE leaves SET slack_notification_sent = $1 WHERE id = $2',
+        [true, leaveRequest.id]
       );
-
-      const leaveRequest = result.rows[0];
-
-      // Optional: Send Slack notification
+      
+      // Sync with Google Calendar if user is admin or there are admin users
       try {
-        await sendLeaveNotification(leaveRequest);
-      } catch (notificationError) {
-        console.error('Failed to send Slack notification:', notificationError);
-        // Don't block the response if Slack notification fails
+        // Get admin users for Google Calendar sync
+        const adminResult = await query(
+          'SELECT id FROM users WHERE role = $1 LIMIT 1',
+          ['admin']
+        );
+        
+        if (adminResult.rows.length > 0) {
+          const adminUserId = adminResult.rows[0].id;
+          await syncLeaveToCalendar(leaveRequest.id, adminUserId);
+        }
+      } catch (syncError) {
+        console.error('Google Calendar sync error (non-critical):', syncError);
+        // Don't fail the entire request if calendar sync fails
       }
-
-      return NextResponse.json(
-        { 
-          success: true, 
-          data: leaveRequest 
-        },
-        { status: 201 }
-      );
-    } catch (error) {
-      console.error('Error creating leave request:', error);
-      return NextResponse.json(
-        { 
-          error: 'Failed to create leave request', 
-          details: String(error) 
-        },
-        { status: 500 }
-      );
     }
-  } catch (error) {
-    console.error('Error processing leave request:', error);
+    
     return NextResponse.json(
-      { 
-        error: 'Failed to process leave request', 
-        details: String(error) 
-      },
+      { success: true, data: leaveRequest },
+      { status: 201 }
+    );
+  } catch (error: Error | unknown) {
+    console.error('Error creating leave request:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create leave request';
+    return NextResponse.json(
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -120,72 +120,92 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const token = extractTokenFromHeader(request);
-    if (!token) {
+    // Extract the token from the Authorization header
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
         { error: 'Authorization token is required' },
         { status: 401 }
       );
     }
     
-    const decoded = verifyToken(token);
-    if (!decoded) {
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the token and extract user ID
+    let decoded: CustomJwtPayload;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
+    } catch {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
       );
     }
-
+    
+    const { searchParams } = new URL(request.url);
+    const queryUserId = searchParams.get('userId');
+    const isAdmin = decoded.role === 'admin';
     const userId = parseInt(decoded.id, 10);
-    const userRole = decoded.role;
-
-    // Determine query based on user role
-    let queryText: string;
-    let queryParams: string[] | number[];
-
-    if (userRole === 'admin') {
-      // Admins can see all leave requests
-      queryText = `
-        SELECT lr.*, u.name as user_name, u.department 
-        FROM leaves lr
-        JOIN users u ON lr.user_id = u.id
-        ORDER BY lr.start_date DESC
-      `;
-      queryParams = [];
+    
+    // All users can see all leave requests
+    // Removed restriction that prevented employees from viewing other users' leave requests
+    
+    let leaveRequests;
+    if (queryUserId) {
+      // If a specific user ID is requested, filter by that
+      const result = await query(
+        `SELECT l.*, 
+                u.id as user_id, u.name as user_name, u.email as user_email, u.department as user_department
+         FROM leaves l
+         JOIN users u ON l.user_id = u.id
+         WHERE l.user_id = $1
+         ORDER BY l.created_at DESC`,
+        [parseInt(queryUserId)]
+      );
+      leaveRequests = result.rows;
     } else {
-      // Regular users can only see their own leave requests
-      queryText = `
-        SELECT * 
-        FROM leaves 
-        WHERE user_id = $1 
-        ORDER BY start_date DESC
-      `;
-      queryParams = [userId.toString()];
+      // All users (both admin and non-admin) can see all leave requests for everyone
+      const result = await query(
+        `SELECT l.*, 
+                u.id as user_id, u.name as user_name, u.email as user_email, u.department as user_department
+         FROM leaves l
+         JOIN users u ON l.user_id = u.id
+         ORDER BY l.created_at DESC`,
+        []
+      );
+      leaveRequests = result.rows;
     }
-
-    const result = await query(queryText, queryParams);
-
-    return NextResponse.json(
-      { 
-        success: true, 
-        data: result.rows.map(row => ({
-          ...row,
-          _id: row.id.toString(), // Ensure a string identifier
-          user: {
-            name: row.user_name,
-            department: row.department
-          }
-        }))
+    
+    // Format the response to match the expected structure in the frontend
+    const formattedLeaveRequests = leaveRequests.map(leave => ({
+      _id: leave.id,
+      user: {
+        _id: leave.user_id,
+        name: leave.user_name,
+        email: leave.user_email,
+        department: leave.user_department
       },
+      startDate: leave.start_date,
+      endDate: leave.end_date,
+      leaveType: leave.leave_type,
+      halfDay: {
+        isHalfDay: leave.is_half_day,
+        period: leave.period
+      },
+      reason: leave.reason,
+      status: leave.status,
+      approvedBy: leave.approved_by_id,
+      createdAt: leave.created_at
+    }));
+    
+    return NextResponse.json(
+      formattedLeaveRequests,
       { status: 200 }
     );
-  } catch (error) {
-    console.error('Error retrieving leave requests:', error);
+  } catch (error: Error | unknown) {
+    console.error('Error fetching leave requests:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to retrieve leave requests', 
-        details: String(error) 
-      },
+      { error: error instanceof Error ? error.message : 'Failed to fetch leave requests' },
       { status: 500 }
     );
   }
@@ -193,16 +213,22 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const token = extractTokenFromHeader(request);
-    if (!token) {
+    // Extract the token from the Authorization header
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
         { error: 'Authorization token is required' },
         { status: 401 }
       );
     }
     
-    const decoded = verifyToken(token);
-    if (!decoded) {
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the token and extract user ID
+    let decoded: CustomJwtPayload;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
+    } catch {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -259,7 +285,7 @@ export async function PATCH(request: NextRequest) {
     
     const updatedLeaveResult = await query(
       `UPDATE leaves 
-       SET start_date = $1, end_date = $2, leave_type = $3, reason = $4, is_half_day = $5, half_day_period = $6, updated_at = NOW()
+       SET start_date = $1, end_date = $2, leave_type = $3, reason = $4, is_half_day = $5, period = $6, updated_at = NOW()
        WHERE id = $7
        RETURNING *`,
       [startDate, endDate, leaveType, reason, isHalfDayValue, periodValue, id]
@@ -277,7 +303,7 @@ export async function PATCH(request: NextRequest) {
     
     // Format response for frontend compatibility
     const formattedLeave = {
-      _id: updatedLeave.id.toString(), // Ensure a string identifier
+      _id: updatedLeave.id,
       user: {
         _id: user.id,
         name: user.name,
@@ -289,13 +315,30 @@ export async function PATCH(request: NextRequest) {
       leaveType: updatedLeave.leave_type,
       halfDay: {
         isHalfDay: updatedLeave.is_half_day,
-        period: updatedLeave.half_day_period
+        period: updatedLeave.period
       },
       reason: updatedLeave.reason,
       status: updatedLeave.status,
       approvedBy: updatedLeave.approved_by_id,
       createdAt: updatedLeave.created_at
     };
+    
+    // Sync with Google Calendar if user is admin or there are admin users
+    try {
+      // Get admin users for Google Calendar sync
+      const adminResult = await query(
+        'SELECT id FROM users WHERE role = $1 LIMIT 1',
+        ['admin']
+      );
+      
+      if (adminResult.rows.length > 0) {
+        const adminUserId = adminResult.rows[0].id;
+        await syncLeaveToCalendar(Number(id), adminUserId);
+      }
+    } catch (syncError) {
+      console.error('Google Calendar sync error (non-critical):', syncError);
+      // Don't fail the entire request if calendar sync fails
+    }
     
     return NextResponse.json(formattedLeave, { status: 200 });
   } catch (error: Error | unknown) {
@@ -309,16 +352,22 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const token = extractTokenFromHeader(request);
-    if (!token) {
+    // Extract the token from the Authorization header
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
         { error: 'Authorization token is required' },
         { status: 401 }
       );
     }
     
-    const decoded = verifyToken(token);
-    if (!decoded) {
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the token and extract user ID
+    let decoded: CustomJwtPayload;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as CustomJwtPayload;
+    } catch {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
@@ -360,6 +409,22 @@ export async function DELETE(request: NextRequest) {
         { error: 'You do not have permission to delete this leave request' },
         { status: 403 }
       );
+    }
+    
+    // Get admin users for Google Calendar sync before deletion
+    try {
+      const adminResult = await query(
+        'SELECT id FROM users WHERE role = $1 LIMIT 1',
+        ['admin']
+      );
+      
+      if (adminResult.rows.length > 0) {
+        const adminUserId = adminResult.rows[0].id;
+        await deleteLeaveFromCalendar(leaveId, adminUserId);
+      }
+    } catch (syncError) {
+      console.error('Google Calendar delete error (non-critical):', syncError);
+      // Continue with deletion even if calendar sync fails
     }
     
     // Delete the leave request

@@ -49,6 +49,16 @@ export const slackConfigs = pgTable('slack_configs', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Google OAuth Credentials table
+export const googleCredentials = pgTable('google_credentials', {
+  id: serial('id').primaryKey(),
+  clientId: text('client_id').notNull(),
+  clientSecret: text('client_secret').notNull(),
+  redirectUri: text('redirect_uri').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Types for TypeScript
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -58,3 +68,6 @@ export type NewLeave = typeof leaves.$inferInsert;
 
 export type SlackConfig = typeof slackConfigs.$inferSelect;
 export type NewSlackConfig = typeof slackConfigs.$inferInsert;
+
+export type GoogleCredential = typeof googleCredentials.$inferSelect;
+export type NewGoogleCredential = typeof googleCredentials.$inferInsert;
