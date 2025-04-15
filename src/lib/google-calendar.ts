@@ -1,19 +1,38 @@
 import { query } from '@/lib/db-utils';
 import { google } from 'googleapis';
+import { getGoogleCredentials } from '../services/googleCredentialService';
 
 // Create OAuth2 client
 const getOAuth2Client = async (userId: number) => {
-  // Validate that environment variables are set
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    console.error('Missing required Google OAuth credentials in environment variables');
+  // Try to get credentials from database first
+  const authConfig = await getGoogleCredentials();
+  
+  // Set clientId, clientSecret and redirectUri from database or environment
+  let clientId, clientSecret, redirectUri;
+  
+  if (authConfig) {
+    // Use credentials from database
+    clientId = authConfig.clientId;
+    clientSecret = authConfig.clientSecret;
+    redirectUri = authConfig.redirectUri;
+  } else {
+    // Fallback to environment variables
+    clientId = process.env.GOOGLE_CLIENT_ID;
+    clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    redirectUri = process.env.GOOGLE_REDIRECT_URI || 'https://developers.google.com/oauthplayground';
+  }
+  
+  // Validate that we have credentials from somewhere
+  if (!clientId || !clientSecret) {
+    console.error('Missing required Google OAuth credentials in both database and environment');
     return null;
   }
 
   // Create the OAuth client with proper credentials
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI || 'https://developers.google.com/oauthplayground'
+    clientId,
+    clientSecret,
+    redirectUri
   );
   
   // Get tokens for this user
@@ -35,22 +54,22 @@ const getOAuth2Client = async (userId: number) => {
     return null;
   }
   
-  // Set credentials with all required fields
-  const credentials: any = {
+  // Set auth credentials with all required fields
+  const authTokens: any = {
     access_token: tokenData.access_token
   };
   
   // Add refresh token if available
   if (tokenData.refresh_token) {
-    credentials.refresh_token = tokenData.refresh_token;
+    authTokens.refresh_token = tokenData.refresh_token;
   }
   
   // Add expiry date if available
   if (tokenData.expiry_date) {
-    credentials.expiry_date = new Date(tokenData.expiry_date).getTime();
+    authTokens.expiry_date = new Date(tokenData.expiry_date).getTime();
   }
   
-  oauth2Client.setCredentials(credentials);
+  oauth2Client.setCredentials(authTokens);
   
   return oauth2Client;
 };
@@ -68,13 +87,14 @@ const getCalendarConfigs = async (leaveType: string) => {
 
 // Sync leave request to Google Calendar
 export const syncLeaveToCalendar = async (leaveId: number, adminUserId: number) => {
-  // First check environment variables to avoid errors
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    console.log('Missing required Google OAuth credentials in environment variables');
+  // Check for credentials in database first, then environment variables
+  const credentials = await getGoogleCredentials();
+  if (!credentials) {
+    console.log('Missing required Google OAuth credentials in both database and environment variables');
     return {
       success: false,
       error: 'Missing Google OAuth credentials',
-      message: 'Please configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your environment variables'
+      message: 'Please configure Google OAuth credentials in Admin > Calendar Settings'
     };
   }
   

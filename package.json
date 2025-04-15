@@ -22,6 +22,7 @@
     "@types/react-datepicker": "^6.2.0",
     "axios": "^1.8.3",
     "bcryptjs": "^3.0.2",
+    "crypto-js": "^4.2.0",
     "dotenv": "^16.3.1",
     "drizzle-kit": "^0.30.6",
     "drizzle-orm": "^0.41.0",
@@ -42,6 +43,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/crypto-js": "^4.2.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

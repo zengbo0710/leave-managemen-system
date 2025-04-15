@@ -48,6 +48,22 @@ const CalendarConfigPage = () => {
   }>(null);
   const [testType, setTestType] = useState<'all-day' | 'half-day'>('all-day');
   
+  // Google OAuth credential state
+  const [googleCredentials, setGoogleCredentials] = useState<{
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    hasClientSecret: boolean;
+  }>({ 
+    clientId: '', 
+    clientSecret: '', 
+    redirectUri: 'https://developers.google.com/oauthplayground',
+    hasClientSecret: false
+  });
+  const [showCredentialForm, setShowCredentialForm] = useState(false);
+  const [isSavingCredentials, setIsSavingCredentials] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
+  
   // Test Google Calendar API integration by creating a test event
   const testCalendarApi = async () => {
     setIsTesting(true);
@@ -100,10 +116,10 @@ const CalendarConfigPage = () => {
         details: {
           leaveId: response.data.id,
           leaveDetails: {
-            type: leave.leave_type,
-            dates: `${leave.start_date} to ${leave.end_date}`,
-            is_half_day: leave.is_half_day,
-            period: leave.period
+            type: leave.leaveType || leave.leave_type,
+            dates: `${leave.startDate || leave.start_date} to ${leave.endDate || leave.end_date}`,
+            is_half_day: leave.halfDay?.isHalfDay || leave.is_half_day,
+            period: leave.halfDay?.period || leave.period
           },
           note: 'Check server logs for calendar sync results',
           checkCalendar: 'Verify that this event appears in your Google Calendar'
@@ -152,14 +168,155 @@ const CalendarConfigPage = () => {
   
   const setupDatabase = async () => {
     try {
+      setIsLoading(true);
       // Setup database tables
       await axios.get('/api/admin/calendar/setup');
       // Then fetch the configuration
       fetchConfig();
+      // Fetch Google credentials
+      fetchGoogleCredentials();
     } catch (error) {
       console.error('Error setting up database:', error);
       // Continue anyway and try to fetch config
       fetchConfig();
+      fetchGoogleCredentials();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Google OAuth credentials management functions
+  const fetchGoogleCredentials = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('Authentication token not found');
+        return;
+      }
+      
+      const response = await axios.get('/api/admin/calendar/credentials', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      setGoogleCredentials({
+        clientId: response.data.clientId || '',
+        clientSecret: '',  // Client secret is never returned from API
+        redirectUri: response.data.redirectUri || 'https://developers.google.com/oauthplayground',
+        hasClientSecret: response.data.hasClientSecret || false
+      });
+      
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        // No credentials found, this is expected for new setup
+        console.log('No Google credentials found in database');
+      } else {
+        console.error('Error fetching Google credentials:', error);
+        setMessage({
+          text: 'Failed to load Google OAuth credentials',
+          type: 'error'
+        });
+      }
+    }
+  };
+  
+  const handleCredentialInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setGoogleCredentials({
+      ...googleCredentials,
+      [name]: value
+    });
+  };
+  
+  const saveGoogleCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      setIsSavingCredentials(true);
+      setMessage({ text: '', type: '' });
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Only send the required fields
+      await axios.post('/api/admin/calendar/credentials', {
+        clientId: googleCredentials.clientId,
+        clientSecret: googleCredentials.clientSecret,
+        redirectUri: googleCredentials.redirectUri
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      setMessage({
+        text: 'Google OAuth credentials saved successfully',
+        type: 'success'
+      });
+      
+      // Update credential state
+      fetchGoogleCredentials();
+      
+      // Hide the form
+      setShowCredentialForm(false);
+      
+    } catch (error) {
+      console.error('Error saving Google credentials:', error);
+      setMessage({
+        text: 'Failed to save Google OAuth credentials',
+        type: 'error'
+      });
+    } finally {
+      setIsSavingCredentials(false);
+    }
+  };
+  
+  const deleteGoogleCredentials = async () => {
+    if (!confirm('Are you sure you want to delete the Google OAuth credentials?')) {
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      await axios.delete('/api/admin/calendar/credentials', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      setMessage({
+        text: 'Google OAuth credentials deleted successfully',
+        type: 'success'
+      });
+      
+      // Reset the form
+      setGoogleCredentials({
+        clientId: '',
+        clientSecret: '',
+        redirectUri: 'https://developers.google.com/oauthplayground',
+        hasClientSecret: false
+      });
+      
+      setShowCredentialForm(false);
+      
+    } catch (error) {
+      console.error('Error deleting Google credentials:', error);
+      setMessage({
+        text: 'Failed to delete Google OAuth credentials',
+        type: 'error'
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -205,10 +362,13 @@ const CalendarConfigPage = () => {
   };
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, type } = e.target;
+    const isCheckbox = type === 'checkbox';
+    const checked = isCheckbox ? (e.target as HTMLInputElement).checked : false;
+    
     setFormData({
       ...formData,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+      [name]: isCheckbox ? checked : value
     });
   };
   
@@ -484,6 +644,186 @@ const CalendarConfigPage = () => {
                     </div>
                   ) : (
                     <>
+                      {/* Google OAuth Credentials Management Section */}
+                      <div className="mb-8 border-b border-gray-200 pb-6">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h3 className="text-lg font-medium text-gray-900">Google OAuth Credentials</h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                              Securely store your Google API credentials in the database
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowCredentialForm(!showCredentialForm)}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          >
+                            {showCredentialForm ? 'Cancel' : (googleCredentials.clientId ? 'Edit Credentials' : 'Add Credentials')}
+                          </button>
+                        </div>
+                        
+                        {!showCredentialForm && googleCredentials.clientId && (
+                          <div className="mt-4 bg-gray-50 p-4 rounded-md">
+                            <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                              <div className="sm:col-span-1">
+                                <dt className="text-sm font-medium text-gray-500">Client ID</dt>
+                                <dd className="mt-1 text-sm text-gray-900">
+                                  {googleCredentials.clientId.substring(0, 15)}...
+                                  <span className="text-xs text-gray-500 ml-1">(masked for security)</span>
+                                </dd>
+                              </div>
+                              <div className="sm:col-span-1">
+                                <dt className="text-sm font-medium text-gray-500">Client Secret</dt>
+                                <dd className="mt-1 text-sm text-gray-900">
+                                  {googleCredentials.hasClientSecret ? "••••••••" : "Not set"}
+                                  <span className="text-xs text-gray-500 ml-1">(stored encrypted)</span>
+                                </dd>
+                              </div>
+                              <div className="sm:col-span-2">
+                                <dt className="text-sm font-medium text-gray-500">Redirect URI</dt>
+                                <dd className="mt-1 text-sm text-gray-900 break-all">
+                                  {googleCredentials.redirectUri}
+                                </dd>
+                              </div>
+                            </dl>
+                            <div className="mt-4 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={deleteGoogleCredentials}
+                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                              >
+                                Delete Credentials
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {showCredentialForm && (
+                          <form onSubmit={saveGoogleCredentials} className="mt-4">
+                            <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                              <div className="sm:col-span-6">
+                                <label htmlFor="clientId" className="block text-sm font-medium text-gray-700">
+                                  Client ID
+                                </label>
+                                <div className="mt-1">
+                                  <input
+                                    type="text"
+                                    name="clientId"
+                                    id="clientId"
+                                    value={googleCredentials.clientId}
+                                    onChange={handleCredentialInputChange}
+                                    required
+                                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                    placeholder="Your Google OAuth Client ID"
+                                  />
+                                </div>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  From Google Cloud Console, e.g. 123456789-abcdef.apps.googleusercontent.com
+                                </p>
+                              </div>
+                              
+                              <div className="sm:col-span-6">
+                                <label htmlFor="clientSecret" className="block text-sm font-medium text-gray-700">
+                                  Client Secret
+                                </label>
+                                <div className="mt-1 relative rounded-md shadow-sm">
+                                  <input
+                                    type={showSecret ? "text" : "password"}
+                                    name="clientSecret"
+                                    id="clientSecret"
+                                    value={googleCredentials.clientSecret}
+                                    onChange={handleCredentialInputChange}
+                                    required
+                                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full pr-10 sm:text-sm border-gray-300 rounded-md"
+                                    placeholder="Your Google OAuth Client Secret"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowSecret(!showSecret)}
+                                    className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
+                                  >
+                                    {showSecret ? (
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                      </svg>
+                                    ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                </div>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  Will be encrypted before storing in the database.
+                                </p>
+                              </div>
+                              
+                              <div className="sm:col-span-6">
+                                <label htmlFor="redirectUri" className="block text-sm font-medium text-gray-700">
+                                  Redirect URI
+                                </label>
+                                <div className="mt-1">
+                                  <input
+                                    type="text"
+                                    name="redirectUri"
+                                    id="redirectUri"
+                                    value={googleCredentials.redirectUri}
+                                    onChange={handleCredentialInputChange}
+                                    required
+                                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                    placeholder="Redirect URI for OAuth flow"
+                                  />
+                                </div>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  For testing, you can use the Google OAuth Playground: https://developers.google.com/oauthplayground
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="mt-6 flex justify-end space-x-3">
+                              <button
+                                type="button"
+                                onClick={() => setShowCredentialForm(false)}
+                                className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={isSavingCredentials}
+                                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                              >
+                                {isSavingCredentials ? 'Saving...' : 'Save Credentials'}
+                              </button>
+                            </div>
+                          </form>
+                        )}
+                        
+                        {!showCredentialForm && (
+                          <div className="mt-4 rounded-md bg-blue-50 p-4">
+                            <div className="flex">
+                              <div className="flex-shrink-0">
+                                <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2h1v3a1 1 0 102 0v-3a1 1 0 00-1-1h-1z" clipRule="evenodd" />
+                                </svg>
+                              </div>
+                              <div className="ml-3">
+                                <h3 className="text-sm font-medium text-blue-800">Security Information</h3>
+                                <div className="mt-2 text-sm text-blue-700">
+                                  <ul className="list-disc pl-5 space-y-1">
+                                    <li>Credentials are encrypted before storage</li>
+                                    <li>Your client secret is never exposed in API responses</li>
+                                    <li>Credentials are accessible only to administrators</li>
+                                  </ul>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Google Calendar Connection Section */}
                       <div className="mb-8 border-b border-gray-200 pb-6">
                         <div className="flex justify-between items-center">
                           <div>
