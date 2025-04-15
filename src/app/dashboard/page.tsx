@@ -63,6 +63,8 @@ export default function Dashboard() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [viewLeave, setViewLeave] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage] = useState<number>(20);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const router = useRouter();
@@ -97,8 +99,19 @@ export default function Dashboard() {
           Authorization: `Bearer ${token}`
         }
       });
-      setLeaves(response.data);
-      setFilteredLeaves(response.data);
+      
+      // Filter leaves to only show leaves with end dates today or in the future
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset to beginning of the day for accurate comparison
+      
+      const currentAndFutureLeaves = response.data.filter((leave: any) => {
+        const endDate = new Date(leave.endDate);
+        endDate.setHours(0, 0, 0, 0); // Reset time component for date comparison
+        return endDate >= today;
+      });
+      
+      setLeaves(currentAndFutureLeaves);
+      setFilteredLeaves(currentAndFutureLeaves);
     } catch (error) {
       console.error('Error fetching leaves:', error);
       if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -114,6 +127,7 @@ export default function Dashboard() {
   const handleSearch = () => {
     if (!searchTerm.trim()) {
       setFilteredLeaves(leaves);
+      setCurrentPage(1); // Reset to first page when search is cleared
       return;
     }
     
@@ -133,12 +147,31 @@ export default function Dashboard() {
     });
     
     setFilteredLeaves(filtered);
+    setCurrentPage(1); // Reset to first page after filtering
   };
   
   // Apply search when searchTerm or searchBy changes
   useEffect(() => {
     handleSearch();
   }, [searchTerm, searchBy]);
+  
+  // Get current leaves for pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredLeaves.slice(indexOfFirstItem, indexOfLastItem);
+  
+  // Pagination navigation functions
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
+  const nextPage = () => {
+    if (currentPage < Math.ceil(filteredLeaves.length / itemsPerPage)) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -872,7 +905,7 @@ export default function Dashboard() {
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredLeaves.map((leave) => (
+                            {currentItems.map((leave) => (
                               <tr key={leave._id}>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   {typeof leave.user === 'object' && leave.user !== null 
@@ -993,6 +1026,92 @@ export default function Dashboard() {
                             ))}
                           </tbody>
                         </table>
+                        
+                        {/* Pagination Controls */}
+                        {filteredLeaves.length > 0 && (
+                          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                            <div className="flex-1 flex justify-between sm:hidden">
+                              <button
+                                onClick={prevPage}
+                                disabled={currentPage === 1}
+                                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                              >
+                                Previous
+                              </button>
+                              <button
+                                onClick={nextPage}
+                                disabled={currentPage === Math.ceil(filteredLeaves.length / itemsPerPage)}
+                                className={`relative ml-3 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${currentPage === Math.ceil(filteredLeaves.length / itemsPerPage) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                              >
+                                Next
+                              </button>
+                            </div>
+                            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                              <div>
+                                <p className="text-sm text-gray-700">
+                                  Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to <span className="font-medium">{Math.min(indexOfLastItem, filteredLeaves.length)}</span> of{' '}
+                                  <span className="font-medium">{filteredLeaves.length}</span> results
+                                </p>
+                              </div>
+                              <div>
+                                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                  <button
+                                    onClick={prevPage}
+                                    disabled={currentPage === 1}
+                                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                                  >
+                                    <span className="sr-only">Previous</span>
+                                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                      <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  </button>
+                                  
+                                  {/* Page Numbers */}
+                                  {Array.from({ length: Math.min(5, Math.ceil(filteredLeaves.length / itemsPerPage)) }).map((_, i) => {
+                                    // Logic for which page numbers to show around the current page
+                                    let pageNum;
+                                    const totalPages = Math.ceil(filteredLeaves.length / itemsPerPage);
+                                    
+                                    if (totalPages <= 5) {
+                                      // If we have 5 or fewer pages, show all of them
+                                      pageNum = i + 1;
+                                    } else if (currentPage <= 3) {
+                                      // If we're near the start, show pages 1-5
+                                      pageNum = i + 1;
+                                    } else if (currentPage >= totalPages - 2) {
+                                      // If we're near the end, show the last 5 pages
+                                      pageNum = totalPages - 4 + i;
+                                    } else {
+                                      // Otherwise show 2 pages before and after the current page
+                                      pageNum = currentPage - 2 + i;
+                                    }
+                                    
+                                    return (
+                                      <button
+                                        key={pageNum}
+                                        onClick={() => paginate(pageNum)}
+                                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${pageNum === currentPage ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+                                      >
+                                        {pageNum}
+                                      </button>
+                                    );
+                                  })}
+                                  
+                                  <button
+                                    onClick={nextPage}
+                                    disabled={currentPage === Math.ceil(filteredLeaves.length / itemsPerPage)}
+                                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${currentPage === Math.ceil(filteredLeaves.length / itemsPerPage) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                                  >
+                                    <span className="sr-only">Next</span>
+                                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  </button>
+                                </nav>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
