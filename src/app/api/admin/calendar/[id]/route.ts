@@ -29,14 +29,17 @@ const verifyAdminRole = async (request: NextRequest) => {
 };
 
 // PUT - Update a calendar configuration
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(
+  request: NextRequest,
+  context: any
+) {
   try {
     const adminCheck = await verifyAdminRole(request);
     if (!adminCheck.isAdmin) {
       return NextResponse.json({ error: adminCheck.error }, { status: 403 });
     }
     
-    const id = params.id;
+    const id = context.params.id;
     const data = await request.json();
     const { calendar_id, calendar_name, leave_type, is_active } = data;
     
@@ -94,14 +97,17 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE - Delete a calendar configuration
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  request: NextRequest,
+  context: any
+) {
   try {
     const adminCheck = await verifyAdminRole(request);
     if (!adminCheck.isAdmin) {
       return NextResponse.json({ error: adminCheck.error }, { status: 403 });
     }
     
-    const id = params.id;
+    const id = context.params.id;
     
     // Check if configuration exists
     const existingConfig = await query(
