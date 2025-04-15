@@ -116,10 +116,10 @@ const CalendarConfigPage = () => {
         details: {
           leaveId: response.data.id,
           leaveDetails: {
-            type: leave.leaveType || leave.leave_type,
-            dates: `${leave.startDate || leave.start_date} to ${leave.endDate || leave.end_date}`,
-            is_half_day: leave.halfDay?.isHalfDay || leave.is_half_day,
-            period: leave.halfDay?.period || leave.period
+            type: leave.leaveType,
+            dates: `${leave.startDate} to ${leave.endDate}`,
+            is_half_day: leave.halfDay?.isHalfDay,
+            period: leave.halfDay?.period
           },
           note: 'Check server logs for calendar sync results',
           checkCalendar: 'Verify that this event appears in your Google Calendar'
