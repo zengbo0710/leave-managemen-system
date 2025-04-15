@@ -62,6 +62,8 @@ export default function Dashboard() {
   });
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [viewLeave, setViewLeave] = useState<any>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const router = useRouter();
 
@@ -911,24 +913,74 @@ export default function Dashboard() {
                                   {new Date(leave.createdAt).toLocaleDateString()}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                  {(typeof leave.user === 'object' && leave.user?._id === user?._id) && (
-                                    <div className="flex space-x-2">
-                                      <button
-                                        onClick={() => handleEditLeave(leave)}
-                                        className="text-indigo-600 hover:text-indigo-900"
-                                        disabled={isEditing}
-                                      >
-                                        {isEditing && leave._id === editFormData.id ? 'Editing...' : 'Edit'}
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteLeave(leave._id)}
-                                        className="text-red-600 hover:text-red-900"
-                                        disabled={isDeleting}
-                                      >
-                                        {isDeleting ? 'Deleting...' : 'Delete'}
-                                      </button>
-                                    </div>
-                                  )}
+                                  <div className="flex space-x-2">
+                                    {/* View button for all leave requests */}
+                                    <button
+                                      onClick={() => {
+                                        setViewLeave(leave);
+                                        setShowViewModal(true);
+                                      }}
+                                      className="text-blue-600 hover:text-blue-900 cursor-pointer"
+                                    >
+                                      View
+                                    </button>
+                                    
+                                    {/* Edit and Delete buttons only for user's own leave requests */}
+                                    {((typeof leave.user === 'object' && leave.user?.name === user?.name) || user?.role === 'admin') && (
+                                      <>
+                                        <button
+                                          onClick={() => {
+                                            setEditFormData({
+                                              id: leave._id,
+                                              startDate: leave.startDate,
+                                              endDate: leave.endDate,
+                                              leaveType: leave.leaveType,
+                                              reason: leave.reason || '',
+                                              halfDay: {
+                                                isHalfDay: leave.halfDay?.isHalfDay || false,
+                                                period: leave.halfDay?.period || 'morning'
+                                              }
+                                            });
+                                            setShowEditModal(true);
+                                          }}
+                                          className="text-indigo-600 hover:text-indigo-900 cursor-pointer"
+                                          disabled={isEditing}
+                                        >
+                                          {isEditing && leave._id === editFormData.id ? 'Editing...' : 'Edit'}
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            if (confirm('Are you sure you want to delete this leave request?')) {
+                                              setIsDeleting(true);
+                                              const token = localStorage.getItem('token');
+                                              if (!token) return;
+                                              
+                                              axios.delete(`/api/leave/${leave._id}`, {
+                                                headers: {
+                                                  Authorization: `Bearer ${token}`
+                                                }
+                                              })
+                                              .then(() => {
+                                                fetchLeaves(); // Refresh the list
+                                                alert('Leave request deleted successfully');
+                                              })
+                                              .catch(error => {
+                                                console.error('Error deleting leave request:', error);
+                                                alert('Failed to delete leave request. Please try again.');
+                                              })
+                                              .finally(() => {
+                                                setIsDeleting(false);
+                                              });
+                                            }
+                                          }}
+                                          className="text-red-600 hover:text-red-900 cursor-pointer"
+                                          disabled={isDeleting}
+                                        >
+                                          {isDeleting ? 'Deleting...' : 'Delete'}
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -943,6 +995,77 @@ export default function Dashboard() {
           </div>
         </main>
       </div>
+      
+      {/* View Leave Modal */}
+      {showViewModal && viewLeave && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Leave Request Details</h3>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="mt-2 text-sm text-gray-700">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="font-medium">Employee:</p>
+                  <p>{typeof viewLeave.user === 'object' ? viewLeave.user.name : 'Unknown'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Department:</p>
+                  <p>{typeof viewLeave.user === 'object' ? viewLeave.user.department : 'Unknown'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Leave Type:</p>
+                  <p>{viewLeave.leaveType}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Duration:</p>
+                  <p>{new Date(viewLeave.startDate).toLocaleDateString()} to {new Date(viewLeave.endDate).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Type:</p>
+                  <p>{viewLeave.halfDay?.isHalfDay ? 
+                    `Half Day (${viewLeave.halfDay.period === 'morning' ? 'AM' : 'PM'})` : 
+                    'Full Day'}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Status:</p>
+                  <p className={`font-semibold ${viewLeave.status === 'approved' ? 'text-green-600' : 
+                    viewLeave.status === 'rejected' ? 'text-red-600' : 'text-yellow-600'}`}>
+                    {viewLeave.status.charAt(0).toUpperCase() + viewLeave.status.slice(1)}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <p className="font-medium">Reason:</p>
+                  <p>{viewLeave.reason || 'No reason provided'}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="font-medium">Created At:</p>
+                  <p>{new Date(viewLeave.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Change Password Modal */}
       {showChangePasswordModal && (

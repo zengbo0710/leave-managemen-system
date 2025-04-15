@@ -129,13 +129,8 @@ export async function GET(request: NextRequest) {
     const isAdmin = decoded.role === 'admin';
     const userId = parseInt(decoded.id, 10);
     
-    // If not admin, can only see their own leaves
-    if (!isAdmin && queryUserId && parseInt(queryUserId) !== userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized to view other users\' leave requests' },
-        { status: 403 }
-      );
-    }
+    // All users can see all leave requests
+    // Removed restriction that prevented employees from viewing other users' leave requests
     
     let leaveRequests;
     if (queryUserId) {
@@ -150,20 +145,8 @@ export async function GET(request: NextRequest) {
         [parseInt(queryUserId)]
       );
       leaveRequests = result.rows;
-    } else if (!isAdmin) {
-      // Non-admin users without specific userId can only see their own leaves
-      const result = await query(
-        `SELECT l.*, 
-                u.id as user_id, u.name as user_name, u.email as user_email, u.department as user_department
-         FROM leaves l
-         JOIN users u ON l.user_id = u.id
-         WHERE l.user_id = $1
-         ORDER BY l.created_at DESC`,
-        [userId]
-      );
-      leaveRequests = result.rows;
     } else {
-      // Otherwise, admin can see all leave requests for everyone
+      // All users (both admin and non-admin) can see all leave requests for everyone
       const result = await query(
         `SELECT l.*, 
                 u.id as user_id, u.name as user_name, u.email as user_email, u.department as user_department
