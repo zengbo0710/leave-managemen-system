@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db-utils';
 import { sendLeaveNotification } from '@/lib/slack';
+import { syncLeaveToCalendar, deleteLeaveFromCalendar } from '@/lib/google-calendar';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 
 interface CustomJwtPayload extends JwtPayload {
@@ -84,6 +85,23 @@ export async function POST(request: NextRequest) {
         'UPDATE leaves SET slack_notification_sent = $1 WHERE id = $2',
         [true, leaveRequest.id]
       );
+      
+      // Sync with Google Calendar if user is admin or there are admin users
+      try {
+        // Get admin users for Google Calendar sync
+        const adminResult = await query(
+          'SELECT id FROM users WHERE role = $1 LIMIT 1',
+          ['admin']
+        );
+        
+        if (adminResult.rows.length > 0) {
+          const adminUserId = adminResult.rows[0].id;
+          await syncLeaveToCalendar(leaveRequest.id, adminUserId);
+        }
+      } catch (syncError) {
+        console.error('Google Calendar sync error (non-critical):', syncError);
+        // Don't fail the entire request if calendar sync fails
+      }
     }
     
     return NextResponse.json(
@@ -305,6 +323,23 @@ export async function PATCH(request: NextRequest) {
       createdAt: updatedLeave.created_at
     };
     
+    // Sync with Google Calendar if user is admin or there are admin users
+    try {
+      // Get admin users for Google Calendar sync
+      const adminResult = await query(
+        'SELECT id FROM users WHERE role = $1 LIMIT 1',
+        ['admin']
+      );
+      
+      if (adminResult.rows.length > 0) {
+        const adminUserId = adminResult.rows[0].id;
+        await syncLeaveToCalendar(Number(id), adminUserId);
+      }
+    } catch (syncError) {
+      console.error('Google Calendar sync error (non-critical):', syncError);
+      // Don't fail the entire request if calendar sync fails
+    }
+    
     return NextResponse.json(formattedLeave, { status: 200 });
   } catch (error: Error | unknown) {
     console.error('Error updating leave request:', error);
@@ -374,6 +409,22 @@ export async function DELETE(request: NextRequest) {
         { error: 'You do not have permission to delete this leave request' },
         { status: 403 }
       );
+    }
+    
+    // Get admin users for Google Calendar sync before deletion
+    try {
+      const adminResult = await query(
+        'SELECT id FROM users WHERE role = $1 LIMIT 1',
+        ['admin']
+      );
+      
+      if (adminResult.rows.length > 0) {
+        const adminUserId = adminResult.rows[0].id;
+        await deleteLeaveFromCalendar(leaveId, adminUserId);
+      }
+    } catch (syncError) {
+      console.error('Google Calendar delete error (non-critical):', syncError);
+      // Continue with deletion even if calendar sync fails
     }
     
     // Delete the leave request

@@ -394,7 +394,23 @@ export default function Dashboard() {
                     }}
                     dateFormat="yyyy-MM-dd"
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    showPopperArrow={false}
+                    showMonthDropdown
+                    showYearDropdown
+                    dropdownMode="select"
+                    popperClassName="react-datepicker-right"
                     required
+                    shouldCloseOnSelect={true}
+                    disabledKeyboardNavigation
+                    inline={false}
+                    calendarClassName="single-date-picker"
+                    formatWeekDay={nameOfDay => nameOfDay.substring(0,1)}
+                    readOnly={true}
+=======
+                    autoComplete="off"
+=======
+                    autoComplete="off"
+                    readOnly={true}
                   />
                 </div>
                 <div>
@@ -415,27 +431,33 @@ export default function Dashboard() {
                     minDate={editFormData.startDate ? new Date(editFormData.startDate) : undefined}
                     dateFormat="yyyy-MM-dd"
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    showPopperArrow={false}
+                    showMonthDropdown
+                    showYearDropdown
+                    dropdownMode="select"
+                    popperClassName="react-datepicker-right"
                     required
+                    shouldCloseOnSelect={true}
+                    disabledKeyboardNavigation
+                    inline={false}
+                    calendarClassName="single-date-picker"
+                    formatWeekDay={nameOfDay => nameOfDay.substring(0,1)}
                   />
                 </div>
                 <div>
                   <label htmlFor="editLeaveType" className="block text-sm font-medium text-gray-700">
                     Leave Type
                   </label>
-                  <select
+                  <input
+                    type="text"
                     id="editLeaveType"
                     name="leaveType"
                     required
                     value={editFormData.leaveType}
                     onChange={handleEditInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm cursor-pointer"
-                  >
-                    <option value="">Select leave type</option>
-                    <option value="Annual">Annual</option>
-                    <option value="Sick">Sick</option>
-                    <option value="Personal">Personal</option>
-                    <option value="Other">Other</option>
-                  </select>
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="Enter leave type (e.g., Annual, Sick, Personal)"
+                  />
                 </div>
                 <div>
                   <label htmlFor="editReason" className="block text-sm font-medium text-gray-700">
@@ -535,6 +557,12 @@ export default function Dashboard() {
                       className="text-indigo-600 hover:text-indigo-900 font-medium"
                     >
                       Slack Configuration
+                    </Link>
+                    <Link
+                      href="/admin/calendar"
+                      className="text-indigo-600 hover:text-indigo-900 font-medium"
+                    >
+                      Calendar Configuration
                     </Link>
                   </>
                 )}
@@ -660,7 +688,21 @@ export default function Dashboard() {
                           dateFormat="yyyy-MM-dd"
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           placeholderText="Select start date"
+                          showPopperArrow={false}
+                          showMonthDropdown
+                          showYearDropdown
+                          dropdownMode="select"
+                          popperClassName="react-datepicker-right"
                           required
+                          shouldCloseOnSelect={true}
+                          disabledKeyboardNavigation
+                          inline={false}
+                          calendarClassName="single-date-picker"
+                          formatWeekDay={nameOfDay => nameOfDay.substring(0,1)}
+                          readOnly={true}
+                          autoComplete="off"
+=======
+                          autoComplete="off"
                         />
                       </div>
                       <div>
@@ -682,7 +724,18 @@ export default function Dashboard() {
                           dateFormat="yyyy-MM-dd"
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           placeholderText="Select end date"
+                          showPopperArrow={false}
+                          showMonthDropdown
+                          showYearDropdown
+                          dropdownMode="select"
+                          popperClassName="react-datepicker-right"
                           required
+                          shouldCloseOnSelect={true}
+                          disabledKeyboardNavigation
+                          inline={false}
+                          calendarClassName="single-date-picker"
+                          formatWeekDay={nameOfDay => nameOfDay.substring(0,1)}
+                          readOnly={true}
                         />
                       </div>
                       <div className="flex items-center my-4">
